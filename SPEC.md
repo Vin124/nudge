@@ -35,7 +35,7 @@ Claude Code to install it."
 | D15 | `nudge-hook` forwards a **whitelisted subset** of hook stdin (tool payloads can exceed the 64KB cap) and never writes to stdout (stdout of SessionStart/UserPromptSubmit hooks is injected into Claude's context). |
 | D16 | Alert sounds are **synthesized with WebAudio** (no audio asset files → no licensing); TTS via the webview's `speechSynthesis` (OS voices). |
 | D17 | One real usage-endpoint request with the local token was approved to verify the D3 opt-in response shape (`five_hour`/`seven_day` → `utilization` 0–100, `resets_at` ISO-8601). |
-| D18 | Cargo build output lives on `E:/nudge-target` on the dev machine (machine-local `.cargo/config.toml`, git-ignored). |
+| D18 | ~~Build output on `E:/nudge-target`~~ **Reverted:** E: is an external USB drive with exFAT (no hard links), which made builds very slow. Build output stays in `target/` on the internal SSD. |
 | D19 | Idle memory: the 80 MB gate was unreachable (WebView2's fixed base is ~308 MB). Settings is created on demand and destroyed on close; alert windows stay pre-loaded for latency. Gate #4 revised below. |
 
 ## Verified current state (this machine, 2026-10-04)
