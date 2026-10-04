@@ -1,0 +1,22 @@
+[package]
+name = "nudge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "nudge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+nudge-proto = { path = "../crates/nudge-proto" }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "protocol-asset"] }
+tauri-plugin-single-instance = "2"
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+tiny_http = "0.12"
+getrandom = "0.2"

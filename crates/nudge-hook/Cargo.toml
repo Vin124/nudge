@@ -1,0 +1,9 @@
+[package]
+name = "nudge-hook"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nudge-proto = { path = "../nudge-proto" }
+serde_json.workspace = true
