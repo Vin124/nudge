@@ -1,0 +1,103 @@
+# Builds the release assets plugin/scripts/install.sh downloads:
+#   nudge-<target>.zip  (app + nudge-hook + nudge-status, flat) and SHA256SUMS
+# Zip layout contract (L1): windows -> nudge.exe, nudge-hook.exe, nudge-status.exe
+#                           macos   -> Nudge.app/, nudge-hook, nudge-status
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x86_64
+            rust: x86_64-pc-windows-msvc
+          - os: macos-14
+            target: macos-aarch64
+            rust: aarch64-apple-darwin
+          - os: macos-13
+            target: macos-x86_64
+            rust: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci && npm --prefix ui ci
+        shell: bash
+
+      - name: Test
+        shell: bash
+        run: |
+          cargo test --workspace
+          npm --prefix ui test
+
+      - name: Build sidecars
+        run: cargo build --release --target ${{ matrix.rust }} -p nudge-hook -p nudge-status
+
+      - name: Build app
+        shell: bash
+        env:
+          # Optional signing/notarization; builds unsigned when secrets are absent.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            npx tauri build --target ${{ matrix.rust }} --bundles app
+          else
+            npx tauri build --target ${{ matrix.rust }} --no-bundle
+          fi
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="target/${{ matrix.rust }}/release"
+          stage="stage"
+          mkdir -p "$stage"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "$out/nudge.exe" "$out/nudge-hook.exe" "$out/nudge-status.exe" "$stage/"
+            (cd "$stage" && 7z a -tzip "../nudge-${{ matrix.target }}.zip" .)
+          else
+            cp -R "$out/bundle/macos/Nudge.app" "$stage/"
+            cp "$out/nudge-hook" "$out/nudge-status" "$stage/"
+            (cd "$stage" && ditto -c -k --sequesterRsrc . "../nudge-${{ matrix.target }}.zip")
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nudge-${{ matrix.target }}
+          path: nudge-${{ matrix.target }}.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum nudge-*.zip > SHA256SUMS && cat SHA256SUMS
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
