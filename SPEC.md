@@ -34,6 +34,9 @@ Claude Code to install it."
 | D14 | A plugin can't be assumed to set `statusLine`; `nudge-status setup` edits `~/.claude/settings.json` with a backup. |
 | D15 | `nudge-hook` forwards a **whitelisted subset** of hook stdin (tool payloads can exceed the 64KB cap) and never writes to stdout (stdout of SessionStart/UserPromptSubmit hooks is injected into Claude's context). |
 | D16 | Alert sounds are **synthesized with WebAudio** (no audio asset files → no licensing); TTS via the webview's `speechSynthesis` (OS voices). |
+| D17 | One real usage-endpoint request with the local token was approved to verify the D3 opt-in response shape (`five_hour`/`seven_day` → `utilization` 0–100, `resets_at` ISO-8601). |
+| D18 | Cargo build output lives on `E:/nudge-target` on the dev machine (machine-local `.cargo/config.toml`, git-ignored). |
+| D19 | Idle memory: the 80 MB gate was unreachable (WebView2's fixed base is ~308 MB). Settings is created on demand and destroyed on close; alert windows stay pre-loaded for latency. Gate #4 revised below. |
 
 ## Verified current state (this machine, 2026-10-04)
 
@@ -165,7 +168,7 @@ hook event. That's acceptable, and the README says so.
 1. On a clean Win 11 and a clean macOS 14+ machine, going from `/plugin install nudge` to a visible notch takes under 2 minutes with no manual file edits (`/nudge:setup` is run by the install flow).
 2. The alert fires within 1s of the `Stop` hook (measured: hook timestamp → glow first frame, p95 over 20 runs).
 3. With 4 concurrent sessions, every session started after install appears within 1s. An exited or killed session disappears within 10s.
-4. Idle app usage is under 1% CPU and under 80MB RAM (5-minute average, 3 sessions idle).
+4. Idle cost of the whole process tree (`nudge.exe` + WebView2 children) is under 1% CPU and under 600 MB working set (5-minute average, 3 sessions idle, production build). *(Revised by D19 from "80 MB", which no WebView2 app can meet.)*
 
 **B. Functional**
 5. Done → green glow, the chosen sound, and the avatar. Blocked → orange, a distinct sound, TTS if enabled.

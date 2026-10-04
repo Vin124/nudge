@@ -27,15 +27,6 @@
         "shadow": false,
         "focus": false,
         "visible": true
-      },
-      {
-        "label": "settings",
-        "url": "settings.html",
-        "title": "Nudge Settings",
-        "width": 520,
-        "height": 640,
-        "visible": false,
-        "resizable": true
       }
     ],
     "security": {

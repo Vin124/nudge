@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const SETTINGS: &str = "settings";
 const ID_SETTINGS: &str = "open-settings";
@@ -79,12 +79,27 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// D19: Settings is created on demand and destroyed on close (default close
+/// behavior), so its WebView2 renderer (~55-60 MB) only exists while it's open.
 fn show_settings(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(SETTINGS) {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    let w = match app.get_webview_window(SETTINGS) {
+        Some(w) => w,
+        None => match WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App("settings.html".into()))
+            .title("Nudge Settings")
+            .inner_size(520.0, 640.0)
+            .resizable(true)
+            .build()
+        {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("nudge: settings window: {e}");
+                return;
+            }
+        },
+    };
+    let _ = w.unminimize();
+    let _ = w.show();
+    let _ = w.set_focus();
 }
 
 fn set_dnd(core: &Core, on: bool) {
@@ -98,16 +113,6 @@ fn set_dnd(core: &Core, on: bool) {
 }
 
 pub fn init(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
-    // Closing Settings hides it so reopening is instant and keeps its state.
-    if let Some(w) = app.get_webview_window(SETTINGS) {
-        let w2 = w.clone();
-        w.on_window_event(move |ev| {
-            if let WindowEvent::CloseRequested { api, .. } = ev {
-                api.prevent_close();
-                let _ = w2.hide();
-            }
-        });
-    }
 
     let open = MenuItem::with_id(app, ID_SETTINGS, "Settings…", true, None::<&str>)?;
     let dnd = CheckMenuItem::with_id(app, ID_DND, "Do Not Disturb", true, core.config().dnd, None::<&str>)?;
