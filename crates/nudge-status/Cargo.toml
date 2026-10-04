@@ -6,4 +6,6 @@ license.workspace = true
 
 [dependencies]
 nudge-proto = { path = "../nudge-proto" }
-serde_json.workspace = true
+# preserve_order: `setup`/`uninstall` must keep the user's settings.json key order (D14).
+serde_json = { workspace = true, features = ["preserve_order"] }
+dirs.workspace = true

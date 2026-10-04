@@ -1,0 +1,6 @@
+{
+  "name": "nudge",
+  "version": "0.1.0",
+  "description": "A notch for Claude Code: live session status, usage wheels and alerts.",
+  "license": "MIT"
+}

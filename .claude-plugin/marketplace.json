@@ -1,0 +1,11 @@
+{
+  "name": "nudge",
+  "owner": { "name": "Nudge contributors" },
+  "plugins": [
+    {
+      "name": "nudge",
+      "source": "./plugin",
+      "description": "A notch for Claude Code: live session status, usage wheels and alerts."
+    }
+  ]
+}
