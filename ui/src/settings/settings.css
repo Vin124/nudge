@@ -1,0 +1,33 @@
+:root { color-scheme: dark; }
+html, body {
+  margin: 0;
+  background: #0b0b0c;
+  color: #e8e8ea;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.settings { max-width: 480px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+h2 { font-size: 12px; margin: 0 0 8px; font-weight: 600; color: #9a9a9e; text-transform: uppercase; letter-spacing: 0.04em; }
+.card { border: 1px solid #ffffff14; border-radius: 16px; padding: 12px 14px; background: #121214; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
+.row.toggle { cursor: pointer; }
+.stack { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.inline { display: inline-flex; align-items: center; gap: 8px; }
+.hint { color: #9a9a9e; font-size: 12px; margin: 6px 0 0; }
+.error { color: #ff8a00; font-size: 12px; margin: 4px 0 0; min-height: 0; }
+.error:empty { display: none; }
+.actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+select, input[type="number"], .btn {
+  background: #1b1b1e; color: inherit; border: 1px solid #ffffff24; border-radius: 8px; padding: 4px 8px; font: inherit;
+}
+input[type="number"] { width: 72px; }
+select { max-width: 240px; }
+.btn { cursor: pointer; }
+.btn:hover { background: #26262a; }
+input[type="color"] { width: 36px; height: 24px; padding: 0; border: 1px solid #ffffff24; border-radius: 6px; background: none; }
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: #3ddc84; }
+.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: #1b1b1e; border: 1px solid #ffffff24; border-radius: 9999px; padding: 2px 4px 2px 10px; }
+.chip-x { background: none; border: 0; color: #9a9a9e; cursor: pointer; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; line-height: 1; }
+.chip-x:hover { color: #fff; background: #ffffff1f; }
+:focus-visible { outline: 2px solid #5aa9ff; outline-offset: 2px; }

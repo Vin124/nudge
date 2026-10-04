@@ -87,8 +87,17 @@ export async function onSnapshot(cb: (s: Snapshot) => void): Promise<UnlistenFn>
     gotEvent = true;
     cb(e.payload);
   });
-  const initial = await api.getSnapshot();
-  // An event that raced ahead of the initial fetch is newer; don't clobber it.
-  if (!gotEvent) cb(initial);
-  return unlisten;
+  // Windows from tauri.conf.json load before the Rust setup() registers the
+  // core state, so the first get_snapshot can fail. Retry until it answers.
+  for (let delay = 100; ; delay = Math.min(delay * 2, 1000)) {
+    try {
+      const initial = await api.getSnapshot();
+      // An event that raced ahead of the initial fetch is newer; don't clobber it.
+      if (!gotEvent) cb(initial);
+      return unlisten;
+    } catch {
+      if (gotEvent) return unlisten;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
 }
