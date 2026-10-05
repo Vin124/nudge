@@ -11,6 +11,7 @@ pub mod session;
 mod tray;
 pub mod usage;
 mod usage_poll;
+pub mod notch;
 
 use crate::alerts::AlertEngine;
 use crate::config::Config;
@@ -83,6 +84,9 @@ pub fn run() {
 
             spawn_sweeper(core.clone());
             usage_poll::spawn(core.clone());
+            let notch = Arc::new(notch::Notch::default());
+            app.manage(notch.clone());
+            notch::spawn_hover(handle.clone(), notch);
             tray::init(&handle, core)?;
             Ok(())
         })
@@ -93,6 +97,10 @@ pub fn run() {
             commands::set_config,
             commands::preview_alert,
             commands::list_avatar_packs,
+            notch::notch_set_hit,
+            notch::notch_drag_start,
+            notch::notch_drag_end,
+            notch::notch_animate_to,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Nudge");

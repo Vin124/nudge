@@ -1,5 +1,9 @@
-// Pure placement math for the notch window. All values are PHYSICAL pixels
-// unless a name says "logical". No Tauri imports so it tests without mocks.
+// Pure placement math for the notch. No Tauri imports so it tests without mocks.
+//
+// D20: the notch window is a fixed square ENVELOPE (logical px) that never
+// resizes. The visible shape is drawn and animated inside it in CSS, and the
+// rest of the window is click-through (src-tauri/src/notch.rs). Screen values
+// are PHYSICAL px; shape rects are LOGICAL px relative to the window.
 
 import type { Edge } from "../shared/contracts";
 
@@ -16,35 +20,40 @@ export interface Point { x: number; y: number }
 export interface Size { width: number; height: number }
 export interface Rect extends Point, Size {}
 
-export const PILL_LONG = 220; // logical
-export const PILL_SHORT = 44; // logical
-export const EXPANDED_W = 320; // logical
-export const HEADER_H = 44; // logical
-export const ROW_H = 32; // logical
-export const MAX_ROWS = 8;
+export const ENVELOPE = 400;
+/** Collapsed thickness, away from the edge. */
+export const THICK = 46;
+export const PAD = 12;
+export const RING = 32;
+export const GAP = 8;
+/** Space between the usage ring and the first session avatar. */
+export const SEP = 14;
+export const MAX_AVATARS = 6;
+export const MIN_LEN = 200;
+/** Collapsed length with every slot filled; clamps placement so it never depends on session count. */
+export const MAX_LEN = PAD + RING + SEP + (MAX_AVATARS + 1) * RING + MAX_AVATARS * GAP + PAD;
+export const PANEL_W = 380;
+export const PANEL_PAD = 10;
+export const HEADER_H = 84;
+export const ROW_H = 52;
+export const MAX_ROWS = 5;
 
 export const isVertical = (edge: Edge): boolean => edge === "left" || edge === "right";
 
-/** Collapsed pill size in physical px; width/height swap on side edges. */
-export function collapsedSize(edge: Edge, scale: number): Size {
-  const long = Math.round(PILL_LONG * scale);
-  const short = Math.round(PILL_SHORT * scale);
-  return isVertical(edge) ? { width: short, height: long } : { width: long, height: short };
-}
-
-/** Logical height of the expanded window for `rowCount` sessions (empty state uses one row). */
-export function expandedHeightLogical(rowCount: number): number {
-  return HEADER_H + Math.min(Math.max(rowCount, 1), MAX_ROWS) * ROW_H;
-}
-
-export function expandedSize(rowCount: number, scale: number): Size {
-  return {
-    width: Math.round(EXPANDED_W * scale),
-    height: Math.round(expandedHeightLogical(rowCount) * scale),
-  };
-}
-
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), Math.max(lo, hi));
+
+/** Collapsed length along the edge for `n` sessions (avatars past MAX_AVATARS fold into a "+k" chip). */
+export function collapsedLength(n: number): number {
+  const shown = Math.min(n, MAX_AVATARS);
+  const chip = n > MAX_AVATARS ? GAP + RING : 0;
+  const avatars = shown > 0 ? SEP + shown * RING + (shown - 1) * GAP + chip : 0;
+  return Math.max(MIN_LEN, PAD + RING + avatars + PAD);
+}
+
+/** Expanded panel height for `n` sessions (empty state uses one row). */
+export function panelHeight(n: number): number {
+  return PANEL_PAD + HEADER_H + clamp(n, 1, MAX_ROWS) * ROW_H + PANEL_PAD;
+}
 
 function contains(m: Monitor, p: Point): boolean {
   return p.x >= m.x && p.x < m.x + m.width && p.y >= m.y && p.y < m.y + m.height;
@@ -80,68 +89,61 @@ export function nearestEdge(m: Monitor, p: Point): Edge {
   return d.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
 }
 
-/** Collapsed window top-left for an edge + offset (0..1 along the edge). */
-export function placeCollapsed(edge: Edge, offset: number, m: Monitor): Point {
-  const s = collapsedSize(edge, m.scale);
-  const o = clamp(offset, 0, 1);
+export interface Placement {
+  /** window top-left, physical px */
+  origin: Point;
+  /** notch center along the edge, logical px from the window's along-edge start */
+  along: number;
+}
+
+/**
+ * Window placement for a notch centered at `offset` (0..1) along `edge`.
+ * The center is clamped so the longest collapsed notch fits; the envelope is
+ * clamped on-screen. Neither depends on session count, so the window never
+ * moves when sessions come and go.
+ */
+export function placeWindow(edge: Edge, offset: number, m: Monitor): Placement {
+  const env = ENVELOPE * m.scale;
+  const half = (MAX_LEN / 2) * m.scale;
+  const [start, len] = isVertical(edge) ? [m.y, m.height] : [m.x, m.width];
+  const center = clamp(start + clamp(offset, 0, 1) * len, start + half, start + len - half);
+  const winStart = Math.round(clamp(center - env / 2, start, start + len - env));
+  const along = (center - winStart) / m.scale;
+  const crossNear = isVertical(edge) ? m.x : m.y;
+  const crossFar = isVertical(edge) ? m.x + m.width - env : m.y + m.height - env;
+  const cross = Math.round(edge === "top" || edge === "left" ? crossNear : crossFar);
+  return { origin: isVertical(edge) ? { x: cross, y: winStart } : { x: winStart, y: cross }, along };
+}
+
+/** The visible shape inside the envelope, logical px. */
+export function shapeRect(edge: Edge, along: number, expanded: boolean, sessions: number): Rect {
+  const vertical = isVertical(edge);
+  const [w, h] = expanded
+    ? [PANEL_W, panelHeight(sessions)]
+    : vertical ? [THICK, collapsedLength(sessions)] : [collapsedLength(sessions), THICK];
+  const alongSize = vertical ? h : w;
+  const a = clamp(along - alongSize / 2, 0, ENVELOPE - alongSize);
   switch (edge) {
-    case "top": return { x: Math.round(m.x + o * (m.width - s.width)), y: m.y };
-    case "bottom": return { x: Math.round(m.x + o * (m.width - s.width)), y: m.y + m.height - s.height };
-    case "left": return { x: m.x, y: Math.round(m.y + o * (m.height - s.height)) };
-    case "right": return { x: m.x + m.width - s.width, y: Math.round(m.y + o * (m.height - s.height)) };
+    case "top": return { x: a, y: 0, width: w, height: h };
+    case "bottom": return { x: a, y: ENVELOPE - h, width: w, height: h };
+    case "left": return { x: 0, y: a, width: w, height: h };
+    case "right": return { x: ENVELOPE - w, y: a, width: w, height: h };
   }
 }
 
 export interface Snap {
   monitor: Monitor;
   edge: Edge;
-  /** 0..1 along the edge, clamped so the pill stays fully on-screen */
+  /** notch center as a 0..1 fraction along the edge */
   offset: number;
-  /** collapsed window size after snapping (orientation applied) */
-  size: Size;
-  /** collapsed window top-left after snapping */
-  position: Point;
 }
 
-/**
- * Snap a dropped window (top-left `pos`, size `size`, physical px) to the
- * nearest edge of the monitor containing its center.
- */
-export function snapToEdge(pos: Point, size: Size, monitors: Monitor[]): Snap {
-  const center = { x: pos.x + size.width / 2, y: pos.y + size.height / 2 };
+/** Snap a dropped notch (its center, physical px) to the nearest edge of the monitor under it. */
+export function snapToEdge(center: Point, monitors: Monitor[]): Snap {
   const monitor = monitorAt(monitors, center);
   const edge = nearestEdge(monitor, center);
-  const s = collapsedSize(edge, monitor.scale);
-  // Offset from the pill center along the edge, so the pill keeps its drop point.
-  let offset: number;
-  if (isVertical(edge)) {
-    const span = monitor.height - s.height;
-    offset = span <= 0 ? 0 : (center.y - s.height / 2 - monitor.y) / span;
-  } else {
-    const span = monitor.width - s.width;
-    offset = span <= 0 ? 0 : (center.x - s.width / 2 - monitor.x) / span;
-  }
-  offset = clamp(offset, 0, 1);
-  return { monitor, edge, offset, size: s, position: placeCollapsed(edge, offset, monitor) };
-}
-
-/**
- * Top-left for the expanded window. It grows inward from the docked edge;
- * along the edge it stays centered on the collapsed pill, clamped on-screen.
- */
-export function placeExpanded(edge: Edge, collapsed: Rect, exp: Size, m: Monitor): Point {
-  switch (edge) {
-    case "top":
-    case "bottom": {
-      const cx = collapsed.x + collapsed.width / 2;
-      const x = clamp(Math.round(cx - exp.width / 2), m.x, m.x + m.width - exp.width);
-      return { x, y: edge === "top" ? m.y : m.y + m.height - exp.height };
-    }
-    case "left":
-    case "right": {
-      const cy = collapsed.y + collapsed.height / 2;
-      const y = clamp(Math.round(cy - exp.height / 2), m.y, m.y + m.height - exp.height);
-      return { x: edge === "left" ? m.x : m.x + m.width - exp.width, y };
-    }
-  }
+  const offset = isVertical(edge)
+    ? (center.y - monitor.y) / monitor.height
+    : (center.x - monitor.x) / monitor.width;
+  return { monitor, edge, offset: clamp(offset, 0, 1) };
 }

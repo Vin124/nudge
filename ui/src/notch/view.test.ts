@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config, Session, Snapshot, UsageSnapshot } from "../shared/contracts";
-import { createView, EMPTY_TEXT, FOCUS_FAIL_TEXT, NA_TOOLTIP, type NotchView } from "./view";
+import { createView, EMPTY_TEXT, FOCUS_FAIL_TEXT, NA_TOOLTIP, pickTint, TINTS, type NotchView } from "./view";
 
 const config = (showWeekly = true): Config => ({
   version: 1,
@@ -40,10 +40,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe("dots", () => {
+describe("session avatars", () => {
   it("renders one dot per session", () => {
     view.render(snap([sess("a"), sess("b"), sess("c")]), NOW);
-    expect(root.querySelectorAll(".dots .dot")).toHaveLength(3);
+    expect(root.querySelectorAll(".dots .avatar")).toHaveLength(3);
     expect(root.querySelectorAll(".list .row")).toHaveLength(3);
   });
   it("maps states to classes", () => {
@@ -51,50 +51,82 @@ describe("dots", () => {
       sess("a", { state: "idle" }), sess("b", { state: "running" }),
       sess("c", { state: "done" }), sess("d", { state: "blocked" }),
     ]), NOW);
-    const dots = [...root.querySelectorAll(".dots .dot")];
+    const dots = [...root.querySelectorAll(".dots .avatar")];
     expect(dots.map((d) => [...d.classList].find((c) => c.startsWith("state-")))).toEqual([
       "state-idle", "state-running", "state-done", "state-blocked",
     ]);
   });
   it("marks alertPending", () => {
     view.render(snap([sess("a", { alertPending: true }), sess("b")]), NOW);
-    const dots = root.querySelectorAll(".dots .dot");
+    const dots = root.querySelectorAll(".dots .avatar");
     expect(dots[0].classList.contains("alert-pending")).toBe(true);
     expect(dots[1].classList.contains("alert-pending")).toBe(false);
   });
 });
 
 describe("usage", () => {
-  it("hides the weekly wheel when showWeekly is false", () => {
+  const gauge = () => root.querySelector('.bar [data-wheel="usage"]') as HTMLElement;
+  it("shows the weekly inner ring only when showWeekly is on", () => {
     view.render(snap([], usage(), false), NOW);
-    expect((root.querySelector('.wheels [data-wheel="seven"]') as HTMLElement).hidden).toBe(true);
-    expect((root.querySelector('.wheels [data-wheel="five"]') as HTMLElement).hidden).toBe(false);
+    expect(gauge().classList.contains("weekly")).toBe(false);
     expect((root.querySelector('[data-usage="seven"]') as HTMLElement).hidden).toBe(true);
     view.render(snap([], usage(), true), NOW);
-    expect((root.querySelector('.wheels [data-wheel="seven"]') as HTMLElement).hidden).toBe(false);
+    expect(gauge().classList.contains("weekly")).toBe(true);
+    expect((root.querySelector('[data-usage="seven"]') as HTMLElement).hidden).toBe(false);
   });
   it("shows percent and reset countdown", () => {
     view.render(snap([]), NOW);
     expect(root.querySelector('[data-usage="five"] .usage-pct')!.textContent).toBe("42%");
     expect(root.querySelector('[data-usage="five"] .usage-reset')!.textContent).toBe("resets in 1h 12m");
   });
+  it("fills the 5h ring in proportion to usage", () => {
+    view.render(snap([]), NOW);
+    const arc = gauge().querySelector(".arc.five")!;
+    const circ = 2 * Math.PI * 14;
+    expect(Number(arc.getAttribute("stroke-dashoffset"))).toBeCloseTo(circ * 0.58, 3);
+  });
   it("shows n/a with tooltip when available is false", () => {
     view.render(snap([], usage({ available: false })), NOW);
-    const w = root.querySelector('.wheels [data-wheel="five"]') as HTMLElement;
-    expect(w.classList.contains("na")).toBe(true);
-    expect(w.textContent).toBe("n/a");
-    expect(w.getAttribute("title")).toBe(NA_TOOLTIP);
+    expect(gauge().classList.contains("na")).toBe(true);
+    expect(gauge().getAttribute("title")).toBe(NA_TOOLTIP);
+    expect(root.querySelector('[data-usage="five"] .usage-pct')!.textContent).toBe("n/a");
   });
-  it("shows empty grey rings when available is null", () => {
+  it("shows empty rings when available is null", () => {
     view.render(snap([], usage({ available: null, fiveHour: null, sevenDay: null })), NOW);
-    const w = root.querySelector('.wheels [data-wheel="five"]') as HTMLElement;
-    expect(w.classList.contains("empty")).toBe(true);
-    expect(w.hasAttribute("title")).toBe(false);
+    expect(gauge().classList.contains("empty")).toBe(true);
+    expect(gauge().hasAttribute("title")).toBe(false);
   });
   it("ramps the ring color with usage", () => {
     view.render(snap([], usage({ fiveHour: { usedPercentage: 10, resetsAt: null }, sevenDay: { usedPercentage: 90, resetsAt: null } })), NOW);
-    const arc = (n: string) => root.querySelector(`.wheels [data-wheel="${n}"] .arc`)!.getAttribute("stroke");
+    const arc = (n: string) => gauge().querySelector(`.arc.${n}`)!.getAttribute("stroke");
     expect(arc("five")).not.toBe(arc("seven"));
+  });
+});
+
+describe("tints and overflow", () => {
+  it("gives live sessions distinct tints that stay put across renders", () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    view.render(snap(ids.map((i) => sess(i))), NOW);
+    const tint = (id: string) => (root.querySelector(`.dots .avatar[data-id="${id}"]`) as HTMLElement).style.getPropertyValue("--tint");
+    const first = ids.map(tint);
+    expect(new Set(first).size).toBe(ids.length);
+    view.render(snap([...ids].reverse().map((i) => sess(i, { state: "running" }))), NOW);
+    expect(ids.map(tint)).toEqual(first);
+  });
+  it("pickTint skips taken slots", () => {
+    const t = pickTint("x", new Set());
+    expect(pickTint("x", new Set([t]))).toBe((t + 1) % TINTS.length);
+  });
+  it("shows at most 6 avatars plus a +k chip", () => {
+    view.render(snap(Array.from({ length: 9 }, (_, i) => sess(`s${i}`))), NOW);
+    const shown = [...root.querySelectorAll(".dots .avatar")].filter((a) => !(a as HTMLElement).hidden);
+    expect(shown).toHaveLength(6);
+    const more = root.querySelector(".more") as HTMLElement;
+    expect(more.hidden).toBe(false);
+    expect(more.textContent).toBe("+3");
+    expect(root.querySelectorAll(".list .row")).toHaveLength(9);
+    view.render(snap([sess("a")]), NOW);
+    expect(more.hidden).toBe(true);
   });
 });
 
@@ -108,7 +140,7 @@ describe("safety and keyed updates", () => {
     const base = [sess("a"), sess("b"), sess("c")];
     view.render(snap(base), NOW);
     const before = [...root.querySelectorAll(".row")];
-    const dotsBefore = [...root.querySelectorAll(".dots .dot")];
+    const dotsBefore = [...root.querySelectorAll(".dots .avatar")];
 
     const muts: MutationRecord[] = [];
     const mo = new MutationObserver((r) => muts.push(...r));
@@ -119,8 +151,8 @@ describe("safety and keyed updates", () => {
 
     const after = [...root.querySelectorAll(".row")];
     expect(after).toEqual(before);
-    expect([...root.querySelectorAll(".dots .dot")]).toEqual(dotsBefore);
-    const touched = new Set(muts.map((m) => (m.target as Node).parentElement?.closest(".row, .dots .dot") ?? (m.target as Element).closest?.(".row, .dots .dot")));
+    expect([...root.querySelectorAll(".dots .avatar")]).toEqual(dotsBefore);
+    const touched = new Set(muts.map((m) => (m.target as Node).parentElement?.closest(".row, .dots .avatar") ?? (m.target as Element).closest?.(".row, .dots .avatar")));
     touched.delete(null);
     const ids = [...touched].map((n) => (n as HTMLElement).dataset.id);
     expect(new Set(ids)).toEqual(new Set(["b"]));
@@ -132,7 +164,7 @@ describe("safety and keyed updates", () => {
     const ids = [...root.querySelectorAll(".row")].map((r) => (r as HTMLElement).dataset.id);
     expect(ids).toEqual(["c", "a"]);
     expect(root.querySelector('.row[data-id="c"]')).toBe(c);
-    expect(root.querySelectorAll(".dots .dot")).toHaveLength(2);
+    expect(root.querySelectorAll(".dots .avatar")).toHaveLength(2);
   });
   it("shows the empty state only with no sessions", () => {
     view.render(snap([]), NOW);

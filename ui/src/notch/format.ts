@@ -33,7 +33,7 @@ export function formatPercent(p: number): number {
 
 /** green < 60 <= amber < 85 <= red */
 export function usageColor(p: number): string {
-  if (p < 60) return "#3ddc84";
-  if (p < 85) return "#ffb020";
-  return "#ff4d4f";
+  if (p < 60) return "#30d158";
+  if (p < 85) return "#ff9f0a";
+  return "#ff453a";
 }

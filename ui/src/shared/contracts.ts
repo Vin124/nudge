@@ -80,6 +80,22 @@ export const api = {
   listAvatarPacks: () => invoke<string[]>("list_avatar_packs"),
 };
 
+/** D20: notch window mechanics (src-tauri/src/notch.rs). Rects are logical, window-relative. */
+export const EVENT_NOTCH_HOVER = "nudge://notch-hover";
+export const EVENT_NOTCH_DROP = "nudge://notch-drop";
+
+export interface NotchRect { x: number; y: number; width: number; height: number }
+
+export const notchApi = {
+  /** The cursor is live only inside this rect; elsewhere the window is click-through. */
+  setHit: (rect: NotchRect | null) => invoke<void>("notch_set_hit", { rect }),
+  /** Rust moves the window with the cursor until release, then emits EVENT_NOTCH_DROP. */
+  dragStart: () => invoke<void>("notch_drag_start"),
+  dragEnd: () => invoke<void>("notch_drag_end"),
+  /** Slide the window (physical px) with ease-out cubic. */
+  animateTo: (x: number, y: number, ms: number) => invoke<void>("notch_animate_to", { x, y, ms }),
+};
+
 /** Subscribe to snapshots; also delivers the current one immediately. */
 export async function onSnapshot(cb: (s: Snapshot) => void): Promise<UnlistenFn> {
   let gotEvent = false;

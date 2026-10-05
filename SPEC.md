@@ -37,6 +37,7 @@ Claude Code to install it."
 | D17 | One real usage-endpoint request with the local token was approved to verify the D3 opt-in response shape (`five_hour`/`seven_day` → `utilization` 0–100, `resets_at` ISO-8601). |
 | D18 | ~~Build output on `E:/nudge-target`~~ **Reverted:** E: is an external USB drive with exFAT (no hard links), which made builds very slow. Build output stays in `target/` on the internal SSD. |
 | D19 | Idle memory: the 80 MB gate was unreachable (WebView2's fixed base is ~308 MB). Settings is created on demand and destroyed on close; alert windows stay pre-loaded for latency. Gate #4 revised below. |
+| D20 | Notch redesign (user live test 2026-10-05: drag glitchy, animation not clean). The notch window is a fixed 400×400 logical transparent envelope that only moves and never resizes. The shape (MacBook-style, flush to the edge with concave ears, on all 4 edges) morphs in CSS. Outside the shape the window is click-through: Rust polls the cursor at 30 Hz against the rect the UI reports (`notch.rs`). Dragging and the snap slide run in Rust (120 Hz), not one IPC call per pointermove. `notch.offset` is now the notch *center* fraction along the edge. Session avatar = state-colored ring around a critter with a per-session tint; usage = 5h outer / weekly inner ring around an original sparkle (not the Claude logo, a trademark). |
 
 ## Verified current state (this machine, 2026-10-04)
 

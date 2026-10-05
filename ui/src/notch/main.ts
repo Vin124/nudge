@@ -1,38 +1,32 @@
-// Tauri glue for the notch window: window placement, hover/click expand,
-// pointer-driven drag with edge snapping. Pure logic lives in geometry/view.
+// Tauri glue for the notch window (D20). The window is a fixed envelope that
+// only moves (never resizes); the shape morphs in CSS. Hover, drag and the
+// snap slide are driven by src-tauri/src/notch.rs, not per-frame IPC.
 
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { availableMonitors, primaryMonitor, PhysicalPosition, type Monitor as TauriMonitor } from "@tauri-apps/api/window";
 import {
-  availableMonitors,
-  getCurrentWindow,
-  primaryMonitor,
-  PhysicalPosition,
-  PhysicalSize,
-  type Monitor as TauriMonitor,
-} from "@tauri-apps/api/window";
-import { api, onSnapshot, type Edge, type Snapshot } from "../shared/contracts";
-import {
-  collapsedSize,
-  expandedSize,
-  placeCollapsed,
-  placeExpanded,
-  resolveMonitor,
-  snapToEdge,
-  type Monitor,
-  type Point,
-  type Size,
-} from "./geometry";
-import { createView } from "./view";
+  api,
+  EVENT_NOTCH_DROP,
+  EVENT_NOTCH_HOVER,
+  notchApi,
+  onSnapshot,
+  type Edge,
+  type Snapshot,
+} from "../shared/contracts";
+import { placeWindow, resolveMonitor, shapeRect, snapToEdge, type Monitor, type Point } from "./geometry";
+import { createView, type Motion } from "./view";
 import "./notch.css";
 
-const HOVER_OPEN_MS = 300;
-const HOVER_CLOSE_MS = 400;
+const HOVER_OPEN_MS = 220;
+const HOVER_CLOSE_MS = 320;
 const DRAG_THRESHOLD_PX = 4;
-const SNAP_ANIM_MS = 120;
-const SNAP_STEPS = 8;
+/** Must match the `snap` duration in notch.css. */
+const SNAP_MS = 280;
 
-const win = getCurrentWindow();
+const win = getCurrentWebviewWindow();
 const root = document.getElementById("app")!;
 const view = createView(root, { onFocus: (id) => api.focusSession(id) });
+view.shape.classList.add("intro");
 
 let monitors: Monitor[] = [];
 let primary: Monitor | null = null;
@@ -40,35 +34,22 @@ let snapshot: Snapshot | null = null;
 let edge: Edge = "top";
 let offset = 0.5;
 let monitorName: string | null = null;
+let along = 0;
+let origin: Point | null = null;
 let expanded = false;
-let lastRows = -1;
+let dragging = false;
 let placed = false;
 let persisting = 0;
-let winPos: Point = { x: 0, y: 0 };
-let winSize: Size = { width: 0, height: 0 };
-let currentMonitor: Monitor | null = null;
 
 let openTimer: ReturnType<typeof setTimeout> | null = null;
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
 
-// Serialized window operations (setPosition/setSize are async IPC).
-let queue: Promise<void> = Promise.resolve();
-function enqueue(fn: () => Promise<void>): Promise<void> {
-  queue = queue.then(fn).catch((e) => console.error("notch window op failed", e));
-  return queue;
-}
+const report = (what: string) => (e: unknown) => console.error(`notch: ${what} failed`, e);
 
 function toMonitor(m: TauriMonitor): Monitor {
   const wa = m.workArea ?? { position: m.position, size: m.size };
-  return {
-    name: m.name,
-    x: wa.position.x,
-    y: wa.position.y,
-    width: wa.size.width,
-    height: wa.size.height,
-    scale: m.scaleFactor,
-  };
+  return { name: m.name, x: wa.position.x, y: wa.position.y, width: wa.size.width, height: wa.size.height, scale: m.scaleFactor };
 }
 
 async function refreshMonitors(): Promise<void> {
@@ -77,26 +58,27 @@ async function refreshMonitors(): Promise<void> {
   primary = prim ? toMonitor(prim) : null;
 }
 
-function applyGeometry(pos: Point, size: Size): Promise<void> {
-  winPos = pos;
-  winSize = size;
-  return enqueue(async () => {
-    await win.setPosition(new PhysicalPosition(pos.x, pos.y));
-    await win.setSize(new PhysicalSize(size.width, size.height));
-  });
+/** Push the current shape rect to the DOM (animated by `motion`) and to the hit test. */
+function applyShape(motion: Motion): void {
+  const r = shapeRect(edge, along, expanded, view.sessionCount());
+  view.setMotion(motion);
+  view.setEdge(edge);
+  view.setRect(r);
+  if (!dragging) notchApi.setHit(r).catch(report("set hit rect"));
 }
 
-function layout(): Promise<void> {
-  if (monitors.length === 0) return Promise.resolve();
-  const mon = resolveMonitor(monitors, monitorName, primary);
-  currentMonitor = mon;
-  const cSize = collapsedSize(edge, mon.scale);
-  const cPos = placeCollapsed(edge, offset, mon);
-  view.setEdge(edge);
-  if (!expanded) return applyGeometry(cPos, cSize);
-  lastRows = view.sessionCount();
-  const eSize = expandedSize(lastRows, mon.scale);
-  return applyGeometry(placeExpanded(edge, { ...cPos, ...cSize }, eSize, mon), eSize);
+/** Place the envelope for edge/offset/monitor; slide there when `slideMs` > 0. */
+function layout(motion: Motion, slideMs = 0): void {
+  if (monitors.length === 0) return;
+  const p = placeWindow(edge, offset, resolveMonitor(monitors, monitorName, primary));
+  along = p.along;
+  applyShape(motion);
+  if (origin && origin.x === p.origin.x && origin.y === p.origin.y) return;
+  origin = p.origin;
+  const move = slideMs > 0
+    ? notchApi.animateTo(p.origin.x, p.origin.y, slideMs)
+    : win.setPosition(new PhysicalPosition(p.origin.x, p.origin.y));
+  move.catch(report("move window"));
 }
 
 // ---- expand / collapse ----
@@ -117,41 +99,36 @@ function setExpanded(next: boolean): void {
     clearInterval(ticker);
     ticker = null;
   }
-  void layout();
+  applyShape(next ? "open" : "close");
 }
 
-// ---- drag state ----
-let dragging = false;
+function onHover(inside: boolean): void {
+  if (dragging) return;
+  if (inside) {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = null;
+    if (!expanded && !openTimer) {
+      openTimer = setTimeout(() => {
+        openTimer = null;
+        setExpanded(true);
+      }, HOVER_OPEN_MS);
+    }
+  } else {
+    if (openTimer) clearTimeout(openTimer);
+    openTimer = null;
+    if (expanded && !closeTimer) {
+      closeTimer = setTimeout(() => {
+        closeTimer = null;
+        setExpanded(false);
+      }, HOVER_CLOSE_MS);
+    }
+  }
+}
+
+// ---- drag ----
 let pressed: { id: number; sx: number; sy: number } | null = null;
-let dragStart: Point = { x: 0, y: 0 };
-let dragScale = 1;
-let dragTarget: Point = { x: 0, y: 0 };
-let moveInFlight = false;
 // A click that ends a drag must not expand or hit a row.
 let suppressClick = false;
-
-view.pill.addEventListener("pointerenter", () => {
-  if (dragging) return;
-  if (closeTimer) clearTimeout(closeTimer);
-  closeTimer = null;
-  if (!expanded && !openTimer) {
-    openTimer = setTimeout(() => {
-      openTimer = null;
-      setExpanded(true);
-    }, HOVER_OPEN_MS);
-  }
-});
-view.pill.addEventListener("pointerleave", () => {
-  if (dragging) return;
-  if (openTimer) clearTimeout(openTimer);
-  openTimer = null;
-  if (expanded && !closeTimer) {
-    closeTimer = setTimeout(() => {
-      closeTimer = null;
-      setExpanded(false);
-    }, HOVER_CLOSE_MS);
-  }
-});
 
 document.addEventListener(
   "click",
@@ -163,146 +140,106 @@ document.addEventListener(
   },
   true,
 );
-view.pill.addEventListener("click", () => {
+view.shape.addEventListener("click", () => {
   if (!expanded) {
     clearHoverTimers();
     setExpanded(true);
   }
 });
 
-function pumpMove(): void {
-  if (moveInFlight) return;
-  moveInFlight = true;
-  const t = dragTarget;
-  winPos = t;
-  void enqueue(() => win.setPosition(new PhysicalPosition(t.x, t.y))).then(() => {
-    moveInFlight = false;
-    if (dragging && (dragTarget.x !== t.x || dragTarget.y !== t.y)) pumpMove();
-  });
-}
-
-view.pill.addEventListener("pointerdown", (e) => {
+view.shape.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   pressed = { id: e.pointerId, sx: e.screenX, sy: e.screenY };
 });
 
-view.pill.addEventListener("pointermove", (e) => {
-  if (!pressed || e.pointerId !== pressed.id) return;
-  const dx = e.screenX - pressed.sx;
-  const dy = e.screenY - pressed.sy;
-  if (!dragging) {
-    if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-    dragging = true;
-    suppressClick = true;
-    void beginDrag(e);
-    return;
-  }
-  if (dragReady) {
-    dragTarget = {
-      x: Math.round(dragStart.x + dx * dragScale),
-      y: Math.round(dragStart.y + dy * dragScale),
-    };
-    pumpMove();
-  }
+view.shape.addEventListener("pointermove", (e) => {
+  if (!pressed || e.pointerId !== pressed.id || dragging) return;
+  if (Math.hypot(e.screenX - pressed.sx, e.screenY - pressed.sy) < DRAG_THRESHOLD_PX) return;
+  dragging = true;
+  suppressClick = true;
+  clearHoverTimers();
+  view.shape.setPointerCapture(e.pointerId);
+  if (expanded) setExpanded(false);
+  view.setFloating(true);
+  notchApi.dragStart().catch((err) => {
+    report("start drag")(err);
+    void onDrop(null);
+  });
 });
 
-let dragReady = false;
-
-async function beginDrag(e: PointerEvent): Promise<void> {
-  dragReady = false;
-  clearHoverTimers();
-  view.pill.setPointerCapture(e.pointerId);
-  await refreshMonitors();
-  if (expanded) {
-    expanded = false;
-    view.setExpanded(false);
-    if (ticker) clearInterval(ticker);
-    ticker = null;
-    await layout();
-  }
-  dragScale = (currentMonitor ?? monitors[0]).scale;
-  dragStart = winPos;
-  dragTarget = winPos;
-  // Re-anchor on the press point so the pill does not jump after the awaits.
-  if (pressed) pressed = { id: pressed.id, sx: e.screenX, sy: e.screenY };
-  dragReady = true;
+function release(): void {
+  pressed = null;
+  if (dragging) notchApi.dragEnd().catch(report("end drag"));
 }
+view.shape.addEventListener("pointerup", release);
+view.shape.addEventListener("pointercancel", release);
 
-async function endDrag(): Promise<void> {
+/** Rust reports where the window ended up; snap the notch to the nearest edge. */
+async function onDrop(pos: Point | null): Promise<void> {
   pressed = null;
   if (!dragging) return;
-  dragging = false;
-  dragReady = false;
   setTimeout(() => {
     suppressClick = false;
   }, 0);
-  if (monitors.length === 0) return;
-
-  const snap = snapToEdge(dragTarget, winSize, monitors);
-  edge = snap.edge;
-  offset = snap.offset;
-  monitorName = snap.monitor.name;
-  currentMonitor = snap.monitor;
-  view.setEdge(edge);
-
-  const from = dragTarget;
-  const to = snap.position;
-  winSize = snap.size;
-  winPos = to;
-  await enqueue(() => win.setSize(new PhysicalSize(snap.size.width, snap.size.height)));
-  for (let i = 1; i <= SNAP_STEPS; i++) {
-    const t = i / SNAP_STEPS;
-    const ease = 1 - (1 - t) * (1 - t);
-    const p = {
-      x: Math.round(from.x + (to.x - from.x) * ease),
-      y: Math.round(from.y + (to.y - from.y) * ease),
-    };
-    await enqueue(() => win.setPosition(new PhysicalPosition(p.x, p.y)));
-    await new Promise((r) => setTimeout(r, SNAP_ANIM_MS / SNAP_STEPS));
+  try {
+    if (pos) {
+      const scale = await win.scaleFactor();
+      const r = shapeRect(edge, along, false, view.sessionCount());
+      const center = { x: pos.x + (r.x + r.width / 2) * scale, y: pos.y + (r.y + r.height / 2) * scale };
+      await refreshMonitors();
+      const snap = snapToEdge(center, monitors);
+      edge = snap.edge;
+      offset = snap.offset;
+      monitorName = snap.monitor.name;
+      origin = pos;
+    }
+  } finally {
+    dragging = false;
+    view.setFloating(false);
+    layout("snap", SNAP_MS);
   }
-  await persist(snap.monitor.name);
+  await persist();
 }
 
-async function persist(name: string | null): Promise<void> {
+async function persist(): Promise<void> {
   if (!snapshot) return;
   const cfg = snapshot.config;
   persisting++;
   try {
-    await api.setConfig({ ...cfg, notch: { ...cfg.notch, edge, offset, monitor: name } });
+    await api.setConfig({ ...cfg, notch: { ...cfg.notch, edge, offset, monitor: monitorName } });
   } catch (err) {
-    console.error("failed to persist notch position", err);
+    report("persist position")(err);
   } finally {
     persisting--;
   }
 }
 
-view.pill.addEventListener("pointerup", () => {
-  void endDrag();
-});
-view.pill.addEventListener("pointercancel", () => {
-  void endDrag();
-});
-
 // ---- snapshots ----
 function onSnap(s: Snapshot): void {
+  const before = view.sessionCount();
   snapshot = s;
   view.render(s);
   const n = s.config.notch;
-  const changed = n.edge !== edge || n.offset !== offset || n.monitor !== monitorName;
-  if ((changed || !placed) && !dragging && persisting === 0) {
-    placed = true;
+  const moved = n.edge !== edge || n.offset !== offset || n.monitor !== monitorName;
+  if ((moved || !placed) && !dragging && persisting === 0) {
     edge = n.edge;
     offset = n.offset;
     monitorName = n.monitor;
-    void layout();
-  } else if (expanded && view.sessionCount() !== lastRows) {
-    void layout();
+    layout(placed ? "snap" : "none", placed ? SNAP_MS : 0);
+    if (!placed) {
+      placed = true;
+      requestAnimationFrame(() => view.shape.classList.remove("intro"));
+    }
+  } else if (view.sessionCount() !== before && !dragging) {
+    applyShape(expanded ? "open" : "close");
   }
 }
 
 async function main(): Promise<void> {
   await refreshMonitors();
+  await win.listen<boolean>(EVENT_NOTCH_HOVER, (e) => onHover(e.payload));
+  await win.listen<Point>(EVENT_NOTCH_DROP, (e) => void onDrop(e.payload));
   await onSnapshot(onSnap);
 }
 
-main().catch((e) => console.error("notch init failed", e));
+main().catch(report("init"));

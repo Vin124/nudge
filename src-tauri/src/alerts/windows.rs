@@ -160,13 +160,14 @@ pub fn avatar_position(
 /// Move the avatar next to the notch (best effort; falls back to where it is).
 pub fn place_avatar(app: &AppHandle, avatar: &WebviewWindow) {
     let Some(notch) = app.get_webview_window("notch") else { return };
-    let (Ok(p), Ok(s), Ok(Some(m))) = (notch.outer_position(), notch.outer_size(), notch.current_monitor()) else {
+    // D20: the notch window is a large transparent envelope; place against the visible shape.
+    let (Some(shape), Ok(Some(m))) = (crate::notch::shape_screen_rect(app), notch.current_monitor()) else {
         return;
     };
     let Ok(asz) = avatar.outer_size() else { return };
     let gap = (AVATAR_GAP * m.scale_factor()).round() as i32;
     let (x, y) = avatar_position(
-        (p.x, p.y, s.width as i32, s.height as i32),
+        shape,
         (m.position().x, m.position().y, m.size().width as i32, m.size().height as i32),
         (asz.width as i32, asz.height as i32),
         gap,

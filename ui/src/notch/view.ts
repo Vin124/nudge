@@ -3,6 +3,8 @@
 
 import type { Edge, Session, SessionState, Snapshot, UsageWindow } from "../shared/contracts";
 import { formatCountdown, formatElapsed, formatPercent, usageColor } from "./format";
+import { MAX_AVATARS, type Rect } from "./geometry";
+import { critter, sparkle, svgEl } from "./icons";
 
 export const NA_TOOLTIP =
   "Usage limits aren't available for API-key sessions — enable live usage in Settings";
@@ -17,9 +19,20 @@ const STATE_LABEL: Record<SessionState, string> = {
   done: "Done",
 };
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const R = 10;
-const CIRC = 2 * Math.PI * R;
+/** Session critter colors: warm, muted, distinct from the state ring colors. */
+export const TINTS = ["#D97757", "#E6B85C", "#7FA7D9", "#8DC07F", "#B39DDB", "#E58FB0", "#5FBFB2", "#C9A27E"];
+
+/** Stable tint for `id`: hash slot, then the next free one if a live session holds it. */
+export function pickTint(id: string, taken: ReadonlySet<number>): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const start = h % TINTS.length;
+  for (let k = 0; k < TINTS.length; k++) {
+    const t = (start + k) % TINTS.length;
+    if (!taken.has(t)) return t;
+  }
+  return start;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -32,109 +45,122 @@ function setText(e: Element, text: string): void {
   if (e.textContent !== text) e.textContent = text;
 }
 function setClass(e: Element, cls: string): void {
-  if (e.className !== cls) e.className = cls;
+  if (e.getAttribute("class") !== cls) e.setAttribute("class", cls);
 }
 function setAttr(e: Element, name: string, v: string): void {
   if (e.getAttribute(name) !== v) e.setAttribute(name, v);
 }
 
-interface Wheel {
-  el: HTMLElement;
+interface Arc {
   arc: SVGCircleElement;
-  label: HTMLElement;
-  key: string;
+  circ: number;
 }
 
-function createWheel(name: string): Wheel {
-  const root = el("div", "wheel empty");
-  root.dataset.wheel = name;
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 28 28");
-  const mk = (cls: string): SVGCircleElement => {
-    const c = document.createElementNS(SVG_NS, "circle");
-    c.setAttribute("class", cls);
-    c.setAttribute("cx", "14");
-    c.setAttribute("cy", "14");
-    c.setAttribute("r", String(R));
-    c.setAttribute("fill", "none");
-    c.setAttribute("stroke-width", "3");
-    return c;
-  };
-  const track = mk("track");
-  const arc = mk("arc");
-  arc.setAttribute("stroke-linecap", "round");
-  arc.setAttribute("stroke-dasharray", `${CIRC} ${CIRC}`);
-  arc.setAttribute("stroke-dashoffset", String(CIRC));
-  arc.setAttribute("transform", "rotate(-90 14 14)");
+/** Track + arc circle pair in a 0..size viewBox, arc starting at 12 o'clock. */
+function ring(svg: SVGSVGElement, size: number, r: number, stroke: number, cls = ""): Arc {
+  const c = size / 2;
+  const circ = 2 * Math.PI * r;
+  const base = { cx: c, cy: c, r, fill: "none", "stroke-width": stroke };
+  const track = svgEl("circle", { ...base, class: `track ${cls}`.trim() });
+  const arc = svgEl("circle", {
+    ...base,
+    class: `arc ${cls}`.trim(),
+    "stroke-linecap": "round",
+    "stroke-dasharray": `${circ} ${circ}`,
+    "stroke-dashoffset": circ,
+    transform: `rotate(-90 ${c} ${c})`,
+  });
   svg.append(track, arc);
-  const label = el("span", "wheel-label");
-  root.append(svg, label);
-  return { el: root, arc, label, key: "" };
+  return { arc, circ };
 }
 
-function updateWheel(w: Wheel, win: UsageWindow | null, available: boolean | null): void {
-  let key: string;
-  if (available === false) key = "na";
-  else if (available === null || win === null) key = "empty";
-  else key = `p${formatPercent(win.usedPercentage)}`;
-  if (key === w.key) return;
-  w.key = key;
-  if (key === "na") {
-    setClass(w.el, "wheel na");
-    setAttr(w.el, "title", NA_TOOLTIP);
-    setText(w.label, "n/a");
-    w.arc.setAttribute("stroke-dashoffset", String(CIRC));
-  } else if (key === "empty" || win === null) {
-    setClass(w.el, "wheel empty");
-    w.el.removeAttribute("title");
-    setText(w.label, "");
-    w.arc.setAttribute("stroke-dashoffset", String(CIRC));
-  } else {
-    const p = formatPercent(win.usedPercentage);
-    setClass(w.el, "wheel");
-    w.el.removeAttribute("title");
-    setText(w.label, "");
-    w.arc.setAttribute("stroke", usageColor(p));
-    w.arc.setAttribute("stroke-dashoffset", String(CIRC * (1 - p / 100)));
-  }
+function setArc(a: Arc, pct: number | null): void {
+  const off = pct === null ? a.circ : a.circ * (1 - pct / 100);
+  setAttr(a.arc, "stroke-dashoffset", String(off));
+  if (pct === null) a.arc.removeAttribute("stroke");
+  else setAttr(a.arc, "stroke", usageColor(pct));
+}
+
+type UsageKey = "na" | "empty" | "ok";
+function usageKey(win: UsageWindow | null, available: boolean | null): UsageKey {
+  if (available === false) return "na";
+  return available === null || win === null ? "empty" : "ok";
+}
+
+// ---- usage gauges ----
+
+interface Gauge {
+  el: HTMLElement;
+  five: Arc;
+  seven: Arc;
+}
+
+/** Collapsed: 5h outer ring, weekly inner ring, sparkle in the middle. */
+function createGauge(): Gauge {
+  const root = el("div", "gauge");
+  root.dataset.wheel = "usage";
+  const svg = svgEl("svg", { viewBox: "0 0 32 32", class: "rings" });
+  const five = ring(svg, 32, 14, 3, "five");
+  const seven = ring(svg, 32, 9.5, 2.5, "seven");
+  root.append(svg, sparkle());
+  return { el: root, five, seven };
+}
+
+function updateGauge(g: Gauge, s: Snapshot): void {
+  const { usage: u, config } = s;
+  const key = usageKey(u.fiveHour, u.available);
+  setClass(g.el, `gauge ${key}${config.notch.showWeekly ? " weekly" : ""}`);
+  if (key === "na") setAttr(g.el, "title", NA_TOOLTIP);
+  else if (key === "ok") setAttr(g.el, "title", `5-hour limit ${formatPercent(u.fiveHour!.usedPercentage)}% used`);
+  else g.el.removeAttribute("title");
+  setArc(g.five, key === "ok" ? formatPercent(u.fiveHour!.usedPercentage) : null);
+  const weekly = u.available && u.sevenDay ? formatPercent(u.sevenDay.usedPercentage) : null;
+  setArc(g.seven, config.notch.showWeekly ? weekly : null);
 }
 
 interface UsageItem {
   el: HTMLElement;
-  wheel: Wheel;
+  arc: Arc;
   pct: HTMLElement;
   reset: HTMLElement;
 }
 
+/** Expanded header: one ring + percent + reset countdown. */
 function createUsageItem(name: string, title: string): UsageItem {
-  const wheel = createWheel(name);
   const root = el("div", "usage-item");
   root.dataset.usage = name;
+  const dial = el("div", "dial");
+  const svg = svgEl("svg", { viewBox: "0 0 44 44", class: "rings" });
+  const arc = ring(svg, 44, 19, 4);
+  dial.append(svg, sparkle());
   const text = el("div", "usage-text");
-  const head = el("div", "usage-head");
-  const pct = el("span", "usage-pct");
-  head.append(el("span", "usage-name", title), pct);
+  const pct = el("div", "usage-pct");
   const reset = el("div", "usage-reset");
-  text.append(head, reset);
-  root.append(wheel.el, text);
-  return { el: root, wheel, pct, reset };
+  text.append(el("div", "usage-name", title), pct, reset);
+  root.append(dial, text);
+  return { el: root, arc, pct, reset };
 }
 
 function updateUsageItem(u: UsageItem, win: UsageWindow | null, available: boolean | null, nowMs: number): void {
-  updateWheel(u.wheel, win, available);
-  if (available === false) {
+  const key = usageKey(win, available);
+  setClass(u.el, `usage-item ${key}`);
+  if (key === "na") {
+    setArc(u.arc, null);
     setText(u.pct, "n/a");
-    setText(u.reset, "");
+    setText(u.reset, "API key session");
     setAttr(u.el, "title", NA_TOOLTIP);
     return;
   }
   u.el.removeAttribute("title");
-  if (available === null || win === null) {
+  if (key === "empty" || win === null) {
+    setArc(u.arc, null);
     setText(u.pct, "—");
-    setText(u.reset, "");
+    setText(u.reset, "waiting for data");
     return;
   }
-  setText(u.pct, `${formatPercent(win.usedPercentage)}%`);
+  const p = formatPercent(win.usedPercentage);
+  setArc(u.arc, p);
+  setText(u.pct, `${p}%`);
   if (win.resetsAt == null) setText(u.reset, "");
   else {
     const c = formatCountdown(win.resetsAt, nowMs);
@@ -142,10 +168,31 @@ function updateUsageItem(u: UsageItem, win: UsageWindow | null, available: boole
   }
 }
 
+// ---- session avatars ----
+
+interface Avatar {
+  el: HTMLElement;
+}
+
+/** State ring around a tinted critter. */
+function createAvatar(tint: number): Avatar {
+  const root = el("span", "avatar");
+  root.style.setProperty("--tint", TINTS[tint]);
+  const svg = svgEl("svg", { viewBox: "0 0 32 32", class: "rings" });
+  ring(svg, 32, 14.5, 2.5);
+  root.append(svg, critter());
+  return { el: root };
+}
+
+function avatarClass(s: Session): string {
+  return `avatar state-${s.state}${s.alertPending ? " alert-pending" : ""}`;
+}
+
 interface Entry {
-  dot: HTMLElement;
+  tint: number;
+  dot: Avatar;
   row: HTMLElement;
-  rowDot: HTMLElement;
+  rowAvatar: Avatar;
   name: HTMLElement;
   state: HTMLElement;
   since: HTMLElement;
@@ -158,42 +205,54 @@ export interface ViewOptions {
   onFocus: (id: string) => Promise<void>;
 }
 
+export type Motion = "open" | "close" | "snap" | "none";
+
 export interface NotchView {
-  pill: HTMLElement;
+  /** The visible shape; drag and hover attach here. */
+  shape: HTMLElement;
   render(snapshot: Snapshot, nowMs?: number): void;
   /** Refresh time-based text (elapsed, countdowns) from the last snapshot. */
   tick(nowMs?: number): void;
   setExpanded(expanded: boolean): void;
   isExpanded(): boolean;
   setEdge(edge: Edge): void;
+  /** Lifted off the edge while dragging. */
+  setFloating(floating: boolean): void;
+  /** Picks the transition curve for the next `setRect`. */
+  setMotion(motion: Motion): void;
+  setRect(r: Rect): void;
   showRowMessage(id: string, text: string, ms?: number): void;
   sessionCount(): number;
 }
 
 export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
-  const pill = el("div", "pill");
-  pill.dataset.edge = "top";
-  pill.dataset.expanded = "false";
+  const shape = el("div", "shape");
+  shape.dataset.edge = "top";
+  shape.dataset.expanded = "false";
+  shape.dataset.floating = "false";
+  shape.dataset.motion = "none";
+  const earA = el("span", "ear ear-a");
+  const earB = el("span", "ear ear-b");
+  const body = el("div", "body");
 
   const bar = el("div", "bar");
-  const wheels = el("div", "wheels");
-  const w5 = createWheel("five");
-  const w7 = createWheel("seven");
-  wheels.append(w5.el, w7.el);
+  const gauge = createGauge();
   const dots = el("div", "dots");
-  bar.append(wheels, dots);
+  const more = el("span", "more");
+  bar.append(gauge.el, dots, more);
 
   const panel = el("div", "panel");
   const usage = el("div", "usage");
-  const u5 = createUsageItem("five", "5h");
+  const u5 = createUsageItem("five", "5-hour");
   const u7 = createUsageItem("seven", "Weekly");
   usage.append(u5.el, u7.el);
   const list = el("div", "list");
   const empty = el("div", "empty-state", EMPTY_TEXT);
   panel.append(usage, list, empty);
 
-  pill.append(bar, panel);
-  root.append(pill);
+  body.append(bar, panel);
+  shape.append(earA, earB, body);
+  root.append(shape);
 
   const entries = new Map<string, Entry>();
   let last: Snapshot | null = null;
@@ -212,30 +271,35 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   }
 
   function createEntry(id: string): Entry {
-    const dot = el("span", "dot");
-    dot.dataset.id = id;
+    const tint = pickTint(id, new Set([...entries.values()].map((e) => e.tint)));
+    const dot = createAvatar(tint);
+    dot.el.dataset.id = id;
     const row = el("div", "row");
     row.dataset.id = id;
     row.setAttribute("role", "button");
-    const rowDot = el("span", "dot");
-    const name = el("span", "row-name");
+    const rowAvatar = createAvatar(tint);
+    const text = el("div", "row-text");
+    const name = el("div", "row-name");
+    const sub = el("div", "row-sub");
     const state = el("span", "row-state");
     const since = el("span", "row-since");
+    sub.append(state, since);
+    text.append(name, sub);
     const msg = el("div", "row-msg");
-    row.append(rowDot, name, state, since, msg);
+    row.append(rowAvatar.el, text, msg);
     row.addEventListener("click", () => {
       Promise.resolve()
         .then(() => opts.onFocus(id))
         .catch(() => showRowMessage(id, FOCUS_FAIL_TEXT));
     });
-    return { dot, row, rowDot, name, state, since, msg, msgTimer: null };
+    return { tint, dot, row, rowAvatar, name, state, since, msg, msgTimer: null };
   }
 
   function updateEntry(e: Entry, s: Session, nowMs: number): void {
-    const cls = `dot state-${s.state}${s.alertPending ? " alert-pending" : ""}`;
-    setClass(e.dot, cls);
-    setClass(e.rowDot, cls);
-    setAttr(e.dot, "title", `${s.project} — ${STATE_LABEL[s.state]}`);
+    const cls = avatarClass(s);
+    setClass(e.dot.el, cls);
+    setClass(e.rowAvatar.el, cls);
+    setAttr(e.dot.el, "title", `${s.project} — ${STATE_LABEL[s.state]}`);
     setText(e.name, s.project);
     setAttr(e.name, "title", s.cwd);
     setClass(e.state, `row-state state-${s.state}`);
@@ -255,9 +319,15 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     last = snapshot;
     const { sessions, usage: u, config } = snapshot;
 
-    const seen = new Set<string>();
+    const seen = new Set(sessions.map((s) => s.id));
+    for (const [id, e] of entries) {
+      if (seen.has(id)) continue;
+      if (e.msgTimer) clearTimeout(e.msgTimer);
+      e.dot.el.remove();
+      e.row.remove();
+      entries.delete(id);
+    }
     for (const s of sessions) {
-      seen.add(s.id);
       let e = entries.get(s.id);
       if (!e) {
         e = createEntry(s.id);
@@ -265,39 +335,48 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
       }
       updateEntry(e, s, nowMs);
     }
-    for (const [id, e] of entries) {
-      if (seen.has(id)) continue;
-      if (e.msgTimer) clearTimeout(e.msgTimer);
-      e.dot.remove();
-      e.row.remove();
-      entries.delete(id);
-    }
     const ordered = sessions.map((s) => entries.get(s.id)!);
-    reorder(dots, ordered.map((e) => e.dot));
+    ordered.forEach((e, i) => {
+      e.dot.el.hidden = i >= MAX_AVATARS;
+    });
+    reorder(dots, ordered.map((e) => e.dot.el));
     reorder(list, ordered.map((e) => e.row));
+    const extra = sessions.length - MAX_AVATARS;
+    more.hidden = extra <= 0;
+    setText(more, extra > 0 ? `+${extra}` : "");
     empty.hidden = sessions.length > 0;
 
-    const showWeekly = config.notch.showWeekly;
-    w7.el.hidden = !showWeekly;
-    u7.el.hidden = !showWeekly;
-    updateWheel(w5, u.fiveHour, u.available);
-    updateWheel(w7, u.sevenDay, u.available);
+    updateGauge(gauge, snapshot);
+    u7.el.hidden = !config.notch.showWeekly;
     updateUsageItem(u5, u.fiveHour, u.available, nowMs);
     updateUsageItem(u7, u.sevenDay, u.available, nowMs);
   }
 
   return {
-    pill,
+    shape,
     render,
     tick(nowMs: number = Date.now()) {
       if (last) render(last, nowMs);
     },
     setExpanded(expanded: boolean) {
-      setAttr(pill, "data-expanded", String(expanded));
+      setAttr(shape, "data-expanded", String(expanded));
     },
-    isExpanded: () => pill.dataset.expanded === "true",
+    isExpanded: () => shape.dataset.expanded === "true",
     setEdge(edge: Edge) {
-      setAttr(pill, "data-edge", edge);
+      setAttr(shape, "data-edge", edge);
+    },
+    setFloating(floating: boolean) {
+      setAttr(shape, "data-floating", String(floating));
+    },
+    setMotion(motion: Motion) {
+      setAttr(shape, "data-motion", motion);
+    },
+    setRect(r: Rect) {
+      const s = shape.style;
+      s.left = `${r.x}px`;
+      s.top = `${r.y}px`;
+      s.width = `${r.width}px`;
+      s.height = `${r.height}px`;
     },
     showRowMessage,
     sessionCount: () => entries.size,
