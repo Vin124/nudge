@@ -5,7 +5,7 @@
 mod schedule;
 mod windows;
 
-use crate::config::{Config, StateAlert};
+use crate::config::{Config, Edge, MascotMode, StateAlert};
 use crate::hub::Core;
 use crate::session::Transition;
 use schedule::{Fire, Scheduler};
@@ -53,6 +53,9 @@ pub struct AlertFire {
     pub volume: f64,
     pub avatar: bool,
     pub avatar_src: Option<String>,
+    /// Where the notch is docked; the mascot peeks out from that side.
+    pub edge: Edge,
+    pub mascot_mode: MascotMode,
 }
 
 struct Inner {
@@ -98,6 +101,8 @@ fn build_payload(fire: &Fire, cfg: &Config, avatars_dir: &std::path::Path) -> Al
         volume: cfg.alerts.volume,
         avatar: st.avatar,
         avatar_src: avatar_src(avatars_dir, cfg.alerts.avatar_pack.as_deref(), fire.kind),
+        edge: cfg.notch.edge,
+        mascot_mode: cfg.alerts.mascot_mode,
     }
 }
 
@@ -117,7 +122,7 @@ impl Inner {
         }
         if let Some(avatar) = self.app.get_webview_window(windows::AVATAR_LABEL) {
             if payload.avatar {
-                windows::place_avatar(&self.app, &avatar);
+                windows::place_avatar(&self.app, &avatar, payload.mascot_mode);
                 windows::show_no_focus(&avatar);
             }
             // The avatar page owns audio even when it stays hidden, so exactly one page plays sound.

@@ -266,10 +266,21 @@ export function createView(root: HTMLElement, deps: ViewDeps): SettingsView {
       pack.value = f.avatarPack;
     },
   );
+  const style = h("select");
+  style.append(
+    h("option", { value: "peek", textContent: "Peek from the notch" }),
+    h("option", { value: "pop", textContent: "Pop in at screen center" }),
+  );
+  bind(
+    style,
+    (f) => (f.mascotMode = style.value === "pop" ? "pop" : "peek"),
+    (f) => (style.value = f.mascotMode),
+  );
   const avatar = h(
     "section",
     { class: "card" },
     h("h2", { textContent: "Avatar" }),
+    selectRow("Mascot style", style),
     selectRow("Avatar pack", pack),
     h("p", { class: "hint", textContent: AVATAR_HINT }),
   );

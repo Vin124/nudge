@@ -4,7 +4,7 @@ import { applyGlow, PULSE_MS, STEADY_MS } from "./glow";
 
 const fire = (over: Partial<AlertFire> = {}): AlertFire => ({
   sessionId: "s", project: "p", kind: "done", escalation: 0, color: "#3ddc84", glow: true,
-  pulses: 3, sound: null, tts: false, ttsVoice: null, volume: 0.5, avatar: false, avatarSrc: null, ...over,
+  pulses: 3, sound: null, tts: false, ttsVoice: null, volume: 0.5, avatar: false, avatarSrc: null, edge: "top", mascotMode: "peek", ...over,
 });
 
 let el: HTMLElement;

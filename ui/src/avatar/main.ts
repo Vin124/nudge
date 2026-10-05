@@ -9,7 +9,7 @@ import { playAlertAudio } from "./audio";
 import { renderAvatar } from "./view";
 
 const HIDE_AFTER_MS = 6000;
-const FADE_MS = 300;
+const FADE_MS = 450;
 const app = document.getElementById("app")!;
 let current: AlertFire | null = null;
 let timer: number | undefined;

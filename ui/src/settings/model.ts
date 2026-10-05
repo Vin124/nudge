@@ -1,7 +1,7 @@
 // Pure settings logic: config <-> form mapping, minutes-list validation, debounce.
 // No DOM, no Tauri.
 
-import type { Config, SoundId, StateAlert } from "../shared/contracts";
+import type { Config, MascotMode, SoundId, StateAlert } from "../shared/contracts";
 
 export const SOUNDS: readonly SoundId[] = ["chime", "ding", "alarm", "bell"];
 export const NO_SOUND = "none";
@@ -32,6 +32,7 @@ export interface Form {
   ttsVoice: string;
   /** "" = Built-in mascot (null) */
   avatarPack: string;
+  mascotMode: MascotMode;
   liveWhenIdle: boolean;
   dnd: boolean;
 }
@@ -62,6 +63,7 @@ export function configToForm(c: Config): Form {
     escalateMinutes: [...c.alerts.escalateMinutes],
     ttsVoice: c.alerts.ttsVoice ?? "",
     avatarPack: c.alerts.avatarPack ?? "",
+    mascotMode: c.alerts.mascotMode ?? "peek",
     liveWhenIdle: c.usage.liveWhenIdle,
     dnd: c.dnd,
   };
@@ -81,6 +83,7 @@ export function formToConfig(f: Form, base: Config): Config {
       volume: f.volume,
       ttsVoice: f.ttsVoice === "" ? null : f.ttsVoice,
       avatarPack: f.avatarPack === "" ? null : f.avatarPack,
+      mascotMode: f.mascotMode,
     },
     usage: { ...base.usage, liveWhenIdle: f.liveWhenIdle },
     dnd: f.dnd,

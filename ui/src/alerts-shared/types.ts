@@ -1,5 +1,5 @@
 // Mirrors `AlertFire` in src-tauri/src/alerts/mod.rs (serde camelCase).
-import type { AlertKind, SoundId } from "../shared/contracts";
+import type { AlertKind, Edge, MascotMode, SoundId } from "../shared/contracts";
 
 export const ALERT_EVENT = "nudge://alert";
 /** Pages emit this with their window label when done; Rust hides the window (no focus steal). */
@@ -21,4 +21,7 @@ export interface AlertFire {
   avatar: boolean;
   /** absolute path of a custom avatar image, or null for the built-in mascot */
   avatarSrc: string | null;
+  /** where the notch is docked; the mascot peeks out from that side */
+  edge: Edge;
+  mascotMode: MascotMode;
 }

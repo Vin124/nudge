@@ -1,12 +1,12 @@
 //! Alert windows: one click-through glow overlay per monitor plus one avatar
 //! popup. None of them may ever take keyboard focus from the user's app.
 
+use crate::config::MascotMode;
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const AVATAR_LABEL: &str = "avatar";
-const AVATAR_LOGICAL: f64 = 240.0;
-/// Gap between the notch and the avatar popup (logical px).
-const AVATAR_GAP: f64 = 12.0;
+/// D21: room for the fox, its speech pill and (pop mode) the smoke puff.
+const AVATAR_LOGICAL: f64 = 320.0;
 
 #[cfg(windows)]
 mod native {
@@ -157,21 +157,27 @@ pub fn avatar_position(
     (x.clamp(mx, (mx + mw - w).max(mx)), y.clamp(my, (my + mh - h).max(my)))
 }
 
-/// Move the avatar next to the notch (best effort; falls back to where it is).
-pub fn place_avatar(app: &AppHandle, avatar: &WebviewWindow) {
+/// Center a `w`x`h` box in `mon` (x, y, w, h).
+pub fn centered(mon: (i32, i32, i32, i32), (w, h): (i32, i32)) -> (i32, i32) {
+    (mon.0 + (mon.2 - w) / 2, mon.1 + (mon.3 - h) / 2)
+}
+
+/// Move the avatar for `mode` (best effort; falls back to where it is).
+/// Peek: flush against the notch's inner side, so the fox slides out from behind it.
+/// Pop: centered on the notch's monitor.
+pub fn place_avatar(app: &AppHandle, avatar: &WebviewWindow, mode: MascotMode) {
     let Some(notch) = app.get_webview_window("notch") else { return };
     // D20: the notch window is a large transparent envelope; place against the visible shape.
     let (Some(shape), Ok(Some(m))) = (crate::notch::shape_screen_rect(app), notch.current_monitor()) else {
         return;
     };
     let Ok(asz) = avatar.outer_size() else { return };
-    let gap = (AVATAR_GAP * m.scale_factor()).round() as i32;
-    let (x, y) = avatar_position(
-        shape,
-        (m.position().x, m.position().y, m.size().width as i32, m.size().height as i32),
-        (asz.width as i32, asz.height as i32),
-        gap,
-    );
+    let mon = (m.position().x, m.position().y, m.size().width as i32, m.size().height as i32);
+    let size = (asz.width as i32, asz.height as i32);
+    let (x, y) = match mode {
+        MascotMode::Peek => avatar_position(shape, mon, size, 0),
+        MascotMode::Pop => centered(mon, size),
+    };
     let _ = avatar.set_position(PhysicalPosition::new(x, y));
 }
 
@@ -193,6 +199,11 @@ mod tests {
         let (x, y) = avatar_position((850, 0, 220, 44), MON, (240, 240), 12);
         assert_eq!(y, 44 + 12);
         assert_eq!(x, 850 + 110 - 120);
+    }
+
+    #[test]
+    fn pop_mode_centers_on_the_monitor() {
+        assert_eq!(centered((1920, -100, 2560, 1440), (480, 480)), (1920 + 1040, -100 + 480));
     }
 
     #[test]

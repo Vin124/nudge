@@ -1,17 +1,116 @@
-html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
-#app { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; padding-bottom: 14px; box-sizing: border-box; }
-.bubble {
-  max-width: 220px; padding: 8px 12px; border-radius: 14px; background: #fff; color: #111;
-  font: 600 14px/1.25 system-ui, "Segoe UI", sans-serif; text-align: center; word-break: break-word;
-  box-shadow: 0 2px 10px rgba(0,0,0,.35); border: 2px solid #3ddc84;
+/* D21: pixel fox stages. The window is placed flush against the notch (peek)
+   or centered on screen (pop); overflow:hidden makes the fox emerge from the
+   window edge that touches the notch. Pixel motion uses steps() on purpose. */
+
+@font-face {
+  font-family: "Silkscreen";
+  src: url("./fonts/silkscreen.woff2") format("woff2");
+  font-display: block;
 }
-#app[data-kind="blocked"] .bubble { border-color: #ff8a00; }
-.figure { cursor: pointer; width: 120px; height: 120px; display: grid; place-items: center; animation: pop .45s cubic-bezier(.3,1.6,.5,1) both, jiggle .6s ease-in-out .5s 2; }
-.figure img { max-width: 120px; max-height: 120px; }
-#app.leaving .figure, #app.leaving .bubble { animation: fadeout .3s ease-in forwards; }
-.spark { animation: twinkle 1s ease-in-out infinite; transform-origin: 96px 31px; }
-@keyframes pop { 0% { transform: scale(.2); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes jiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
-@keyframes twinkle { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
-@keyframes fadeout { to { opacity: 0; transform: translateY(8px); } }
-@media (prefers-reduced-motion: reduce) { .figure, .spark { animation: none; } }
+
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+#app {
+  position: relative; height: 100%; box-sizing: border-box; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+#app[data-stage="peek-top"] { flex-direction: column; justify-content: flex-start; }
+#app[data-stage="peek-bottom"] { flex-direction: column-reverse; justify-content: flex-start; }
+#app[data-stage="peek-right"] { flex-direction: row-reverse; justify-content: flex-start; }
+#app[data-stage="peek-left"] { flex-direction: row; justify-content: flex-start; }
+#app[data-stage="pop"] { flex-direction: column; gap: 14px; }
+
+.actor { flex: none; cursor: pointer; position: relative; z-index: 2; }
+.actor img { display: block; max-width: 120px; max-height: 120px; }
+
+/* ---- speech pill ---- */
+.bubble {
+  flex: none; max-width: 200px; padding: 5px 8px; box-sizing: border-box;
+  font: 400 12px/1.35 Silkscreen, ui-monospace, monospace; text-transform: uppercase; text-align: center;
+  word-break: break-word; color: #2a1810; background: #fff4e4;
+  border: 2px solid #2a1810; box-shadow: 3px 3px 0 #2a1810;
+  animation: fadeUp .3s steps(3) .55s both;
+  position: relative; z-index: 2;
+}
+#app[data-kind="done"] .bubble { box-shadow: 3px 3px 0 #2f9e5f; }
+#app[data-kind="blocked"] .bubble { box-shadow: 3px 3px 0 #c75b16; }
+#app[data-stage="peek-top"] .bubble { margin-top: 4px; }
+#app[data-stage="peek-bottom"] .bubble { margin-bottom: 36px; }
+#app[data-stage^="peek-left"] .bubble, #app[data-stage^="peek-right"] .bubble { max-width: 170px; }
+
+/* ---- entrances / exits ---- */
+#app[data-stage="peek-top"] .actor { animation: peekIn .7s steps(6) both; }
+#app[data-stage="peek-top"] .hold { transform-origin: 50% 0; animation: swing 1.6s steps(4) .7s infinite; }
+#app[data-stage="peek-bottom"] .actor { animation: peekUp .7s steps(6) both; }
+#app[data-stage="peek-right"] .actor { animation: sideIn .6s steps(5) both; margin-right: -22px; }
+#app[data-stage="peek-right"] .hold { transform-origin: 100% 60%; transform: rotate(-10deg); animation: sideTilt 1.4s steps(2) .6s infinite; }
+#app[data-stage="peek-left"] .actor { animation: sideInL .6s steps(5) both; margin-left: -22px; }
+/* Mirror the sprite in place; tilt the mirror-image way around the left edge. */
+#app[data-stage="peek-left"] .fox { transform: scaleX(-1); }
+#app[data-stage="peek-left"] .hold { transform-origin: 0% 60%; transform: rotate(10deg); animation: sideTiltL 1.4s steps(2) .6s infinite; }
+#app[data-stage="pop"] .actor { animation: popIn .55s steps(4) .15s both; }
+
+#app.leaving .bubble { animation: fadeOut .2s steps(2) both; }
+#app.leaving[data-stage="peek-top"] .actor { animation: peekOut .45s steps(4) both; }
+#app.leaving[data-stage="peek-bottom"] .actor { animation: peekDown .45s steps(4) both; }
+#app.leaving[data-stage="peek-right"] .actor { animation: sideOut .4s steps(4) both; }
+#app.leaving[data-stage="peek-left"] .actor { animation: sideOutL .4s steps(4) both; }
+#app.leaving[data-stage="pop"] .actor { animation: popOut .3s steps(3) both; }
+
+/* ---- the fox ---- */
+.fox { position: relative; }
+.sprite { display: block; overflow: visible; }
+.sprite g { transform-box: fill-box; }
+.fox-body { animation: bob 1.2s steps(2) infinite; }
+.fox.done .fox-body { animation: pxHop .6s steps(3) infinite; }
+.fox-bubble { position: absolute; animation: bob 1s steps(2) infinite; }
+.fox-spark { position: absolute; animation: pxSparkle 1s steps(3) infinite both; }
+.tail { transform-origin: 0% 100%; animation: wag .9s steps(2) infinite alternate; }
+.fox.done .tail { animation-duration: .35s; }
+.paw-wave { transform-origin: 100% 100%; animation: wave .45s steps(2) infinite alternate; }
+.paw-cheer-l { transform-origin: 100% 100%; animation: cheerL .5s steps(2) infinite; }
+.paw-cheer-r { transform-origin: 0% 100%; animation: cheerR .5s steps(2) infinite; }
+.eyes-open { animation: eyesOpen 3.4s steps(1) infinite; }
+.eyes-blink { opacity: 0; animation: eyesBlink 3.4s steps(1) infinite; }
+
+/* ---- pop smoke ---- */
+.smoke { position: absolute; left: 50%; top: calc(50% - 40px); width: 0; height: 0; z-index: 3; pointer-events: none; }
+.puff {
+  position: absolute; background: #f6f0e8;
+  box-shadow: inset -4px -4px 0 #d8cbbb, 0 0 0 3px #b8a796;
+  animation: puff .8s steps(5) both;
+}
+
+@keyframes peekIn { 0% { transform: translateY(-105%); } 70% { transform: translateY(7%); } 100% { transform: translateY(0); } }
+@keyframes peekOut { 0% { transform: translateY(0); } 100% { transform: translateY(-110%); } }
+@keyframes peekUp { 0% { transform: translateY(105%); } 70% { transform: translateY(-7%); } 100% { transform: translateY(0); } }
+@keyframes peekDown { 0% { transform: translateY(0); } 100% { transform: translateY(110%); } }
+@keyframes sideIn { 0% { transform: translateX(110%); } 75% { transform: translateX(-8%); } 100% { transform: translateX(0); } }
+@keyframes sideOut { 0% { transform: translateX(0); } 100% { transform: translateX(120%); } }
+@keyframes sideInL { 0% { transform: translateX(-110%); } 75% { transform: translateX(8%); } 100% { transform: translateX(0); } }
+@keyframes sideOutL { 0% { transform: translateX(0); } 100% { transform: translateX(-120%); } }
+@keyframes sideTilt { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(-4deg); } }
+@keyframes sideTiltL { 0%, 100% { transform: rotate(9deg); } 50% { transform: rotate(4deg); } }
+@keyframes swing { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(4deg); } 75% { transform: rotate(-4deg); } }
+@keyframes popIn { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0); opacity: 0; } }
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: none; } }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes pxHop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12%); } }
+@keyframes pxSparkle { 0%, 100% { transform: scale(0); opacity: 0; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes wag { 0% { transform: rotate(-10deg); } 100% { transform: rotate(10deg); } }
+@keyframes wave { 0% { transform: rotate(-18deg); } 100% { transform: rotate(22deg); } }
+@keyframes cheerL { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-16deg); } }
+@keyframes cheerR { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(16deg); } }
+@keyframes eyesOpen { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes eyesBlink { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes puff {
+  0% { transform: translate(0, 0) scale(.2); opacity: 0; }
+  20% { opacity: 1; }
+  55% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1.3), calc(var(--dy) * 1.3 - 12px)) scale(.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actor, .hold, .fox-body, .fox-bubble, .tail, .paw-wave, .paw-cheer-l, .paw-cheer-r, .puff { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+}

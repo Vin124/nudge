@@ -13,6 +13,7 @@ const cfg = (): Config => ({
     volume: 0.5,
     ttsVoice: null,
     avatarPack: "cat",
+    mascotMode: "pop",
   },
   usage: { liveWhenIdle: true },
   dnd: true,

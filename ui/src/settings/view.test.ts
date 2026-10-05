@@ -14,6 +14,7 @@ const cfg = (over: Partial<Config["alerts"]> = {}): Config => ({
     volume: 0.7,
     ttsVoice: null,
     avatarPack: null,
+    mascotMode: "peek",
     ...over,
   },
   usage: { liveWhenIdle: false },

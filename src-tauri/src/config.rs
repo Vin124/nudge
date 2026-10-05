@@ -14,6 +14,15 @@ pub enum Edge {
     Right,
 }
 
+/// D21: how the fox mascot appears. `Peek` comes out from behind the notch; `Pop` puffs in at screen center.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum MascotMode {
+    #[default]
+    Peek,
+    Pop,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotchConfig {
@@ -74,6 +83,7 @@ pub struct AlertsConfig {
     pub tts_voice: Option<String>,
     /// Name of a folder under `~/.nudge/avatars`, or null for the built-in mascot (D6).
     pub avatar_pack: Option<String>,
+    pub mascot_mode: MascotMode,
 }
 
 impl Default for AlertsConfig {
@@ -86,6 +96,7 @@ impl Default for AlertsConfig {
             volume: 0.7,
             tts_voice: None,
             avatar_pack: None,
+            mascot_mode: MascotMode::Peek,
         }
     }
 }

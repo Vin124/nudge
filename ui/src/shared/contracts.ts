@@ -33,6 +33,8 @@ export interface UsageSnapshot {
 }
 
 export type Edge = "top" | "bottom" | "left" | "right";
+/** D21: fox peeks out from the notch, or pops in at screen center. */
+export type MascotMode = "peek" | "pop";
 export type SoundId = "chime" | "ding" | "alarm" | "bell";
 
 export interface StateAlert {
@@ -54,6 +56,7 @@ export interface Config {
     volume: number;
     ttsVoice: string | null;
     avatarPack: string | null;
+    mascotMode: MascotMode;
   };
   usage: { liveWhenIdle: boolean };
   dnd: boolean;
