@@ -172,6 +172,7 @@ function updateUsageItem(u: UsageItem, win: UsageWindow | null, available: boole
 
 interface Avatar {
   el: HTMLElement;
+  arc: Arc;
 }
 
 /** State ring around a tinted critter. */
@@ -179,13 +180,23 @@ function createAvatar(tint: number): Avatar {
   const root = el("span", "avatar");
   root.style.setProperty("--tint", TINTS[tint]);
   const svg = svgEl("svg", { viewBox: "0 0 32 32", class: "rings" });
-  ring(svg, 32, 14.5, 2.5);
+  const arc = ring(svg, 32, 14.5, 2.5);
   root.append(svg, critter());
-  return { el: root };
+  return { el: root, arc };
 }
 
 function avatarClass(s: Session): string {
-  return `avatar state-${s.state}${s.alertPending ? " alert-pending" : ""}`;
+  return `avatar state-${s.state}${s.alertPending ? " alert-pending" : ""}${s.contextPercent != null ? " ctx" : ""}`;
+}
+
+/** D22: the ring fills with context-window use; without data it stays a full state ring. */
+function updateRing(a: Avatar, s: Session): void {
+  const p = s.contextPercent == null ? 0 : formatPercent(s.contextPercent);
+  setAttr(a.arc.arc, "stroke-dashoffset", String(a.arc.circ * (1 - p / 100)));
+}
+
+function contextClass(p: number): string {
+  return p >= 85 ? "row-ctx full" : p >= 60 ? "row-ctx warn" : "row-ctx";
 }
 
 interface Entry {
@@ -196,6 +207,7 @@ interface Entry {
   name: HTMLElement;
   state: HTMLElement;
   since: HTMLElement;
+  ctx: HTMLElement;
   msg: HTMLElement;
   msgTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -283,7 +295,8 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     const sub = el("div", "row-sub");
     const state = el("span", "row-state");
     const since = el("span", "row-since");
-    sub.append(state, since);
+    const ctx = el("span", "row-ctx");
+    sub.append(state, since, ctx);
     text.append(name, sub);
     const msg = el("div", "row-msg");
     row.append(rowAvatar.el, text, msg);
@@ -292,14 +305,20 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
         .then(() => opts.onFocus(id))
         .catch(() => showRowMessage(id, FOCUS_FAIL_TEXT));
     });
-    return { tint, dot, row, rowAvatar, name, state, since, msg, msgTimer: null };
+    return { tint, dot, row, rowAvatar, name, state, since, ctx, msg, msgTimer: null };
   }
 
   function updateEntry(e: Entry, s: Session, nowMs: number): void {
     const cls = avatarClass(s);
     setClass(e.dot.el, cls);
     setClass(e.rowAvatar.el, cls);
-    setAttr(e.dot.el, "title", `${s.project} — ${STATE_LABEL[s.state]}`);
+    updateRing(e.dot, s);
+    updateRing(e.rowAvatar, s);
+    const ctxText = s.contextPercent == null ? "" : `${formatPercent(s.contextPercent)}% context`;
+    setAttr(e.dot.el, "title", `${s.project} — ${STATE_LABEL[s.state]}${ctxText ? ` · ${ctxText}` : ""}`);
+    setText(e.ctx, ctxText);
+    setClass(e.ctx, contextClass(s.contextPercent == null ? 0 : formatPercent(s.contextPercent)));
+    if (e.ctx.hidden !== !ctxText) e.ctx.hidden = !ctxText;
     setText(e.name, s.project);
     setAttr(e.name, "title", s.cwd);
     setClass(e.state, `row-state state-${s.state}`);

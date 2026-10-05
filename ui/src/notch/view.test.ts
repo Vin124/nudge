@@ -20,7 +20,7 @@ const usage = (over: Partial<UsageSnapshot> = {}): UsageSnapshot => ({
 });
 
 const sess = (id: string, over: Partial<Session> = {}): Session => ({
-  id, project: `proj-${id}`, cwd: `/x/${id}`, state: "idle", sinceMs: 0, alertPending: false, ...over,
+  id, project: `proj-${id}`, cwd: `/x/${id}`, state: "idle", sinceMs: 0, alertPending: false, contextPercent: null, ...over,
 });
 
 const snap = (sessions: Session[], u = usage(), showWeekly = true): Snapshot => ({
@@ -100,6 +100,32 @@ describe("usage", () => {
     view.render(snap([], usage({ fiveHour: { usedPercentage: 10, resetsAt: null }, sevenDay: { usedPercentage: 90, resetsAt: null } })), NOW);
     const arc = (n: string) => gauge().querySelector(`.arc.${n}`)!.getAttribute("stroke");
     expect(arc("five")).not.toBe(arc("seven"));
+  });
+});
+
+describe("context ring", () => {
+  const circ = 2 * Math.PI * 14.5;
+  const dot = () => root.querySelector('.dots .avatar[data-id="a"]') as HTMLElement;
+  it("fills the session ring with context use and shows it in the row", () => {
+    view.render(snap([sess("a", { state: "running", contextPercent: 42 })]), NOW);
+    expect(dot().classList.contains("ctx")).toBe(true);
+    expect(Number(dot().querySelector(".arc")!.getAttribute("stroke-dashoffset"))).toBeCloseTo(circ * 0.58, 3);
+    const ctx = root.querySelector(".row-ctx") as HTMLElement;
+    expect(ctx.textContent).toBe("42% context");
+    expect(ctx.hidden).toBe(false);
+    expect(dot().getAttribute("title")).toBe("proj-a — Running · 42% context");
+  });
+  it("warns as the context fills up", () => {
+    view.render(snap([sess("a", { contextPercent: 90 })]), NOW);
+    expect(root.querySelector(".row-ctx")!.classList.contains("full")).toBe(true);
+    view.render(snap([sess("a", { contextPercent: 70 })]), NOW);
+    expect(root.querySelector(".row-ctx")!.classList.contains("warn")).toBe(true);
+  });
+  it("falls back to a plain state ring without context data", () => {
+    view.render(snap([sess("a", { contextPercent: 30 })]), NOW);
+    view.render(snap([sess("a", { contextPercent: null })]), NOW);
+    expect(dot().classList.contains("ctx")).toBe(false);
+    expect((root.querySelector(".row-ctx") as HTMLElement).hidden).toBe(true);
   });
 });
 

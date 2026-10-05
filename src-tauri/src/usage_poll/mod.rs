@@ -145,6 +145,7 @@ mod tests {
             session_id: None,
             rate_limits_available: Some(true),
             rate_limits: Some(RateLimits { five_hour: Some(RateWindow { used_percentage: 1.0, resets_at: None }), seven_day: None }),
+            context_used_percentage: None,
         }));
     }
 

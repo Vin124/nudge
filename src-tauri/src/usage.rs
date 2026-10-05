@@ -103,6 +103,7 @@ mod tests {
                 five_hour: Some(RateWindow { used_percentage: p, resets_at: Some(100) }),
                 seven_day: None,
             }),
+            context_used_percentage: None,
         }
     }
 

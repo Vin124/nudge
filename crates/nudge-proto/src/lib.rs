@@ -56,6 +56,10 @@ pub struct StatusEnvelope {
     pub session_id: Option<String>,
     pub rate_limits_available: Option<bool>,
     pub rate_limits: Option<RateLimits>,
+    /// D22: `context_window.used_percentage` of this session (null before the first API reply).
+    /// Defaulted so an older sidecar's envelope still parses.
+    #[serde(default)]
+    pub context_used_percentage: Option<f64>,
 }
 
 impl StatusEnvelope {
@@ -71,6 +75,11 @@ impl StatusEnvelope {
             session_id: raw.get("session_id").and_then(|v| v.as_str()).map(str::to_owned),
             rate_limits_available: raw.get("rate_limits_available").and_then(|v| v.as_bool()),
             rate_limits,
+            context_used_percentage: raw
+                .get("context_window")
+                .and_then(|c| c.get("used_percentage"))
+                .and_then(|v| v.as_f64())
+                .filter(|p| p.is_finite()),
         }
     }
 }
@@ -225,5 +234,21 @@ mod tests {
         let t = std::time::Instant::now();
         assert!(post(PATH_HOOK, b"{}").is_err());
         assert!(t.elapsed() < SIDECAR_TIMEOUT);
+    }
+
+    #[test]
+    fn parses_context_window_used_percentage() {
+        let s = StatusEnvelope::from_statusline(&json!({"session_id": "x", "context_window": {"used_percentage": 42.5, "context_window_size": 200000}}));
+        assert_eq!(s.context_used_percentage, Some(42.5));
+        let none = StatusEnvelope::from_statusline(&json!({"context_window": {"used_percentage": null}}));
+        assert_eq!(none.context_used_percentage, None);
+        assert_eq!(StatusEnvelope::from_statusline(&json!({})).context_used_percentage, None);
+    }
+
+    #[test]
+    fn old_sidecar_envelope_without_context_still_parses() {
+        let old = json!({"v": 1, "ts_ms": 1, "session_id": "x", "rate_limits_available": null, "rate_limits": null});
+        let s: StatusEnvelope = serde_json::from_value(old).unwrap();
+        assert_eq!(s.context_used_percentage, None);
     }
 }

@@ -84,7 +84,11 @@ impl Core {
             let mut st = self.lock();
             match msg {
                 Inbound::Hook(h) => (st.sessions.apply_hook(&h), false),
-                Inbound::Status(s) => (vec![], st.usage.apply_status(&s)),
+                Inbound::Status(s) => {
+                    let usage = st.usage.apply_status(&s);
+                    let ctx = s.session_id.as_deref().is_some_and(|id| st.sessions.apply_context(id, s.context_used_percentage));
+                    (vec![], usage || ctx)
+                }
             }
         };
         self.publish(ts, changed);

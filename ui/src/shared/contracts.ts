@@ -15,6 +15,8 @@ export interface Session {
   sinceMs: number;
   /** D8: true from Done/Blocked until acknowledged */
   alertPending: boolean;
+  /** D22: context window used, 0..100; null until the session's statusline reports it */
+  contextPercent: number | null;
 }
 
 export interface UsageWindow {

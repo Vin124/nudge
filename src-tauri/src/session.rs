@@ -25,6 +25,8 @@ pub struct Session {
     pub since_ms: u64,
     /// True from entering Done/Blocked until acknowledged (D8).
     pub alert_pending: bool,
+    /// D22: share of the context window in use, 0..100, from this session's statusline.
+    pub context_percent: Option<f64>,
     #[serde(skip)]
     pub claude_pid: Option<u32>,
     #[serde(skip)]
@@ -181,6 +183,19 @@ impl SessionStore {
     }
 
     /// D8 acknowledgement. Returns Acked only if an alert was pending.
+    /// Record a session's context usage. Unknown sessions are ignored (hooks create sessions).
+    /// Returns whether the snapshot changed.
+    pub fn apply_context(&mut self, id: &str, percent: Option<f64>) -> bool {
+        let Some(s) = self.sessions.get_mut(id) else { return false };
+        let p = percent.map(|p| p.clamp(0.0, 100.0));
+        // null (no API reply yet, or after /clear) clears it: a stale value would mislead.
+        if s.context_percent == p {
+            return false;
+        }
+        s.context_percent = p;
+        true
+    }
+
     pub fn ack(&mut self, id: &str) -> Option<Transition> {
         let s = self.sessions.get_mut(id)?;
         if !s.alert_pending {
@@ -215,6 +230,7 @@ fn new_session(id: &str, cwd: &str, env: &HookEnvelope) -> Session {
         state: SessionState::Idle,
         since_ms: env.ts_ms,
         alert_pending: false,
+        context_percent: None,
         claude_pid: find_claude_pid(&env.ancestors),
         ancestors: env.ancestors.clone(),
         last_event_ms: env.ts_ms,
@@ -382,6 +398,20 @@ mod tests {
         st.apply_hook(&ev("a", "Stop", 1));
         st.apply_hook(&ev("a", "UserPromptSubmit", 2));
         assert!(!st.get("a").unwrap().alert_pending);
+    }
+
+    #[test]
+    fn context_percent_tracks_statusline_and_clears_on_null() {
+        let mut st = SessionStore::default();
+        assert!(!st.apply_context("a", Some(10.0)), "unknown sessions are ignored");
+        st.apply_hook(&ev("a", "SessionStart", 1));
+        assert!(st.apply_context("a", Some(42.0)));
+        assert!(!st.apply_context("a", Some(42.0)), "no change, no snapshot");
+        assert_eq!(st.get("a").unwrap().context_percent, Some(42.0));
+        assert!(st.apply_context("a", Some(140.0)));
+        assert_eq!(st.get("a").unwrap().context_percent, Some(100.0));
+        assert!(st.apply_context("a", None));
+        assert_eq!(st.get("a").unwrap().context_percent, None);
     }
 
     #[test]
