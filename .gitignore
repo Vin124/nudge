@@ -6,3 +6,6 @@ ui/dist/
 .DS_Store
 src-tauri/gen/
 .cargo/config.toml
+
+# /brag launch-video output (incl. timestamped runs)
+brag-output*/
