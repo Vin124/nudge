@@ -9,3 +9,6 @@ src-tauri/gen/
 
 # /brag launch-video output (incl. timestamped runs)
 brag-output*/
+
+.vercel
+.env*
