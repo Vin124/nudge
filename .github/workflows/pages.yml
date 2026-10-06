@@ -1,10 +1,12 @@
-# Builds the landing page (site/) and deploys it to GitHub Pages.
+# The landing page moved to Vercel (https://nudge-notch.vercel.app). GitHub
+# Pages now only redirects the old https://vin124.github.io/nudge/ links there,
+# keeping the path, so old shares still land and are counted in one place.
 name: pages
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", "ui/src/avatar/fox.ts", "ui/src/notch/icons.ts", "ui/src/avatar/fonts/**", "ui/vite.site.config.ts", ".github/workflows/pages.yml"]
+    paths: [".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -20,17 +22,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-      - run: npm --prefix ui ci
-      - run: npm --prefix ui run site:build
+      - name: Write redirect page
+        run: |
+          mkdir -p out
+          cat > out/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <title>Nudge has moved</title>
+          <link rel="canonical" href="https://nudge-notch.vercel.app/">
+          <meta http-equiv="refresh" content="0; url=https://nudge-notch.vercel.app/">
+          <script>location.replace("https://nudge-notch.vercel.app" + location.pathname.replace(/^\/nudge/, "") + location.search + location.hash);</script>
+          </head><body><p>Nudge moved to <a href="https://nudge-notch.vercel.app/">nudge-notch.vercel.app</a>.</p></body></html>
+          HTML
+          cp out/index.html out/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site/dist
+          path: out
 
   deploy:
     needs: build
