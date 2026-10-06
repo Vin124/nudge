@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nudge — a notch for Claude Code</title>
+  <meta name="description" content="A tiny notch that tells you the moment Claude Code finishes or needs you. Live sessions, usage and context at a glance. Free and open source." />
+  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <meta property="og:title" content="Nudge — a notch for Claude Code" />
+  <meta property="og:description" content="Stop watching the terminal. Nudge taps you on the shoulder when Claude is done or needs you." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='9' width='28' height='14' rx='7' fill='%23000'/%3E%3Ccircle cx='10' cy='16' r='3.4' fill='none' stroke='%2330d158' stroke-width='1.6'/%3E%3Ccircle cx='22' cy='16' r='3.4' fill='none' stroke='%23ff9f0a' stroke-width='1.6'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Nudge home"><span class="brand-mark" aria-hidden="true"></span>Nudge</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a class="nav-gh" href="https://github.com/Vin124/nudge">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">A notch for Claude Code</p>
+      <h1>Go do something else.<br /><span class="soft">Nudge will tap you.</span></h1>
+      <p class="lede">A tiny notch on the edge of your screen that watches every Claude Code session, and tells you the moment one is done or needs you.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#install">Get Nudge</a>
+        <a class="btn btn-ghost" href="https://github.com/Vin124/nudge">View on GitHub</a>
+      </div>
+      <p class="fineprint">Free and open source · Windows and macOS</p>
+    </section>
+
+    <section class="demo-wrap" aria-label="Interactive demo">
+      <div class="stage-outer" id="stage-outer">
+        <div class="stage" id="stage">
+          <div class="wallpaper" aria-hidden="true"></div>
+          <div class="term" aria-hidden="true">
+            <div class="term-bar"><i></i><i></i><i></i><span>~/api-refactor — claude</span></div>
+            <div class="term-body" id="term"></div>
+          </div>
+          <div class="fox-slot" id="fox-slot" aria-hidden="true"></div>
+          <div class="dnotch" id="dnotch"></div>
+        </div>
+      </div>
+      <p class="caption" id="caption" aria-live="polite">Three sessions, one glance.</p>
+      <div class="demo-controls">
+        <button class="chip-btn" data-act="done" type="button">Finish a session</button>
+        <button class="chip-btn" data-act="ask" type="button">Ask for permission</button>
+        <button class="chip-btn" data-act="peek" type="button">Peek inside</button>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <h2 class="section-title">Everything you'd glance at the terminal for.<br /><span class="soft">Without the glancing.</span></h2>
+      <div class="grid">
+        <article class="card">
+          <div class="art" id="art-rings"></div>
+          <h3>One ring per session</h3>
+          <p>White while it works, green when it's done, orange when it needs you. Each ring fills as that session's context window does.</p>
+        </article>
+        <article class="card">
+          <div class="art" id="art-usage"></div>
+          <h3>Usage at a glance</h3>
+          <p>Your 5-hour and weekly limits, straight from Claude Code's own statusline. No guessing when you'll hit the wall.</p>
+        </article>
+        <article class="card">
+          <div class="art art-fox" id="art-fox"></div>
+          <h3>A fox on your shoulder</h3>
+          <p>When a session wraps up, a little pixel fox peeks out from behind the notch. Click it and you're back in that terminal.</p>
+        </article>
+        <article class="card">
+          <div class="art" id="art-levels"></div>
+          <h3>Quiet to loud</h3>
+          <p>Pick a level, or tune glow, sound, voice and the fox for each kind of alert. Do Not Disturb when you're in the zone.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <h2 class="section-title">Two commands.<br /><span class="soft">Then forget it's there.</span></h2>
+      <ol class="steps">
+        <li>
+          <span class="step-n">1</span>
+          <div>
+            <h3>Add the marketplace</h3>
+            <p>Inside any Claude Code session:</p>
+            <div class="cmd"><code>/plugin marketplace add Vin124/nudge</code><button class="copy" type="button" data-copy="/plugin marketplace add Vin124/nudge">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <span class="step-n">2</span>
+          <div>
+            <h3>Install the plugin</h3>
+            <div class="cmd"><code>/plugin install nudge@nudge</code><button class="copy" type="button" data-copy="/plugin install nudge@nudge">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <span class="step-n">3</span>
+          <div>
+            <h3>Start a new session</h3>
+            <p>Nudge downloads the app for your platform, verifies its checksum, and the notch appears. That's it.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="privacy">
+      <div class="privacy-card">
+        <h2>Stays on your machine.</h2>
+        <p>Claude Code reports session state to Nudge over <code>127.0.0.1</code> only. Nudge never reads your Claude login unless you switch on live usage, and even then it only talks to <code>api.anthropic.com</code>. Your existing statusline keeps working, untouched.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Made with care for people who'd rather not stare at a terminal.</p>
+    <p class="foot-small">MIT licensed · <a href="https://github.com/Vin124/nudge">Source on GitHub</a> · Not affiliated with Anthropic.</p>
+  </footer>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

@@ -10,7 +10,7 @@ NUDGE_HOME="${NUDGE_HOME:-$HOME/.nudge}"
 BIN="$NUDGE_HOME/bin"
 LOG="$NUDGE_HOME/install.log"
 LOCK="$NUDGE_HOME/install.lock"
-BASE_URL="https://github.com/${NUDGE_REPO:-nudge-app/nudge}/releases/latest/download"
+BASE_URL="https://github.com/${NUDGE_REPO:-Vin124/nudge}/releases/latest/download"
 TMP=""
 
 mkdir -p "$NUDGE_HOME" 2>/dev/null || exit 0

@@ -1,12 +1,12 @@
 # Nudge — Claude Code plugin
 
-A notch for Claude Code: live session status, usage wheels and alerts.
+A notch for Claude Code: live session status, usage and context rings, and alerts.
 Not an official Anthropic product.
 
 ## Install
 
 ```
-/plugin marketplace add nudge-app/nudge
+/plugin marketplace add Vin124/nudge
 /plugin install nudge
 ```
 
