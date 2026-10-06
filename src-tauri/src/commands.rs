@@ -48,10 +48,3 @@ pub fn list_avatar_packs() -> Vec<String> {
     names.sort();
     names
 }
-
-/// D23: the gear in the expanded notch. Async: building a window from a sync
-/// command deadlocks on Windows (the main thread is busy running the command).
-#[tauri::command]
-pub async fn open_settings(app: tauri::AppHandle) {
-    crate::tray::show_settings(&app);
-}

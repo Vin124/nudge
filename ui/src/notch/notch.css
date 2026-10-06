@@ -228,6 +228,37 @@ html, body {
 .empty-state { display: flex; align-items: center; justify-content: center; height: 52px; color: var(--muted); border-top: 1px solid var(--hair); }
 .empty-state[hidden] { display: none; }
 
+/* ---- D24: Settings page, pushed in from the right like iOS navigation ---- */
+.pane {
+  position: absolute; width: 380px; height: 384px; box-sizing: border-box;
+  display: flex; flex-direction: column;
+  opacity: 0; transform: translateX(28px); filter: blur(3px); pointer-events: none;
+  transition: opacity 200ms ease, transform 380ms var(--ease-morph), filter 200ms ease;
+}
+.shape[data-edge="top"] .pane, .shape[data-edge="left"] .pane { top: 0; left: 0; }
+.shape[data-edge="bottom"] .pane { bottom: 0; left: 0; }
+.shape[data-edge="right"] .pane { top: 0; right: 0; }
+.shape[data-expanded="true"][data-page="settings"] .pane {
+  opacity: 1; transform: none; filter: none; pointer-events: auto;
+  transition: opacity 260ms ease 80ms, transform 420ms var(--ease-morph), filter 260ms ease 80ms;
+}
+.shape[data-expanded="true"][data-page="settings"] .panel {
+  opacity: 0; transform: translateX(-28px); filter: blur(3px); pointer-events: none;
+  transition: opacity 160ms ease, transform 380ms var(--ease-morph), filter 160ms ease;
+}
+.pane-head { flex: none; display: flex; align-items: center; gap: 4px; height: 44px; padding: 6px 12px 0 6px; }
+.pane-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.back {
+  width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 50%;
+  background: transparent; color: rgba(255, 255, 255, 0.55); cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.back:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.back .chevron-icon { display: block; width: 20px; height: 20px; }
+.pane-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 14px; }
+.pane-scroll::-webkit-scrollbar { width: 4px; }
+.pane-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
   .shape[data-motion="open"], .shape[data-motion="close"] { --dur: 120ms; --ease: ease; }
   .avatar.state-running .arc { animation-duration: 3s; }

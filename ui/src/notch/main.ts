@@ -8,14 +8,17 @@ import {
   api,
   EVENT_NOTCH_DROP,
   EVENT_NOTCH_HOVER,
+  EVENT_NOTCH_OPEN_SETTINGS,
   notchApi,
   onSnapshot,
   type Edge,
   type Snapshot,
 } from "../shared/contracts";
-import { placeWindow, resolveMonitor, shapeRect, snapToEdge, type Monitor, type Point } from "./geometry";
+import { mountSettings, type SettingsController } from "../settings/controller";
+import { placeWindow, resolveMonitor, shapeRect, snapToEdge, type Monitor, type Page, type Point } from "./geometry";
 import { createView, type Motion } from "./view";
 import "./notch.css";
+import "../settings/settings.css";
 
 const HOVER_OPEN_MS = 220;
 const HOVER_CLOSE_MS = 320;
@@ -27,7 +30,8 @@ const win = getCurrentWebviewWindow();
 const root = document.getElementById("app")!;
 const view = createView(root, {
   onFocus: (id) => api.focusSession(id),
-  onSettings: () => void api.openSettings().catch(report("open settings")),
+  onSettings: () => openSettings(),
+  onBack: () => closeSettings(),
 });
 view.shape.classList.add("intro");
 
@@ -43,6 +47,11 @@ let expanded = false;
 let dragging = false;
 let placed = false;
 let persisting = 0;
+/** D24: the expanded notch shows the session list ("home") or Settings. */
+let page: Page = "home";
+let settings: SettingsController | null = null;
+/** Last cursor state from Rust; Back needs it to collapse a notch the cursor already left. */
+let lastInside = false;
 
 let openTimer: ReturnType<typeof setTimeout> | null = null;
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -63,7 +72,7 @@ async function refreshMonitors(): Promise<void> {
 
 /** Push the current shape rect to the DOM (animated by `motion`) and to the hit test. */
 function applyShape(motion: Motion): void {
-  const r = shapeRect(edge, along, expanded, view.sessionCount());
+  const r = shapeRect(edge, along, expanded, view.sessionCount(), page);
   view.setMotion(motion);
   view.setEdge(edge);
   view.setRect(r);
@@ -94,6 +103,7 @@ function clearHoverTimers(): void {
 function setExpanded(next: boolean): void {
   if (expanded === next) return;
   expanded = next;
+  if (!next && page === "settings") leaveSettings();
   view.setExpanded(next);
   if (next) {
     view.tick();
@@ -106,7 +116,11 @@ function setExpanded(next: boolean): void {
 }
 
 function onHover(inside: boolean): void {
+  lastInside = inside;
   if (dragging) return;
+  // D24: Settings stays open while the cursor is out (dropdowns and the color
+  // picker open outside the notch). Back, the gear, or Esc close it.
+  if (page === "settings" && !inside) return;
   if (inside) {
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = null;
@@ -127,6 +141,37 @@ function onHover(inside: boolean): void {
     }
   }
 }
+
+// ---- D24: Settings page ----
+function leaveSettings(): void {
+  page = "home";
+  view.setPage("home");
+  void settings?.flush();
+}
+
+function openSettings(): void {
+  clearHoverTimers();
+  if (!settings) settings = mountSettings(view.settingsHost);
+  if (snapshot) settings.show(snapshot.config);
+  settings.refreshPacks();
+  page = "settings";
+  view.setPage("settings");
+  if (!expanded) setExpanded(true);
+  else applyShape("open");
+}
+
+function closeSettings(): void {
+  if (page !== "settings") return;
+  leaveSettings();
+  applyShape("open");
+  if (!lastInside) onHover(false);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (page === "settings") closeSettings();
+  else if (expanded) setExpanded(false);
+});
 
 // ---- drag ----
 let pressed: { id: number; sx: number; sy: number } | null = null;
@@ -152,6 +197,8 @@ view.shape.addEventListener("click", () => {
 
 view.shape.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
+  // Controls (sliders, selects, inputs) and the Settings page never start a drag.
+  if ((e.target as Element).closest(".pane, input, select, button, textarea")) return;
   pressed = { id: e.pointerId, sx: e.screenX, sy: e.screenY };
 });
 
@@ -222,6 +269,7 @@ function onSnap(s: Snapshot): void {
   const before = view.sessionCount();
   snapshot = s;
   view.render(s);
+  settings?.show(s.config);
   const n = s.config.notch;
   const moved = n.edge !== edge || n.offset !== offset || n.monitor !== monitorName;
   if ((moved || !placed) && !dragging && persisting === 0) {
@@ -242,6 +290,7 @@ async function main(): Promise<void> {
   await refreshMonitors();
   await win.listen<boolean>(EVENT_NOTCH_HOVER, (e) => onHover(e.payload));
   await win.listen<Point>(EVENT_NOTCH_DROP, (e) => void onDrop(e.payload));
+  await win.listen(EVENT_NOTCH_OPEN_SETTINGS, () => openSettings());
   await onSnapshot(onSnap);
 }
 

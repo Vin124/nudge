@@ -37,6 +37,8 @@ export const PANEL_PAD = 10;
 export const HEADER_H = 84;
 export const ROW_H = 52;
 export const MAX_ROWS = 5;
+/** D24: the Settings page uses (nearly) the whole envelope; it scrolls inside. */
+export const SETTINGS_H = 384;
 
 export const isVertical = (edge: Edge): boolean => edge === "left" || edge === "right";
 
@@ -115,11 +117,13 @@ export function placeWindow(edge: Edge, offset: number, m: Monitor): Placement {
   return { origin: isVertical(edge) ? { x: cross, y: winStart } : { x: winStart, y: cross }, along };
 }
 
+export type Page = "home" | "settings";
+
 /** The visible shape inside the envelope, logical px. */
-export function shapeRect(edge: Edge, along: number, expanded: boolean, sessions: number): Rect {
+export function shapeRect(edge: Edge, along: number, expanded: boolean, sessions: number, page: Page = "home"): Rect {
   const vertical = isVertical(edge);
   const [w, h] = expanded
-    ? [PANEL_W, panelHeight(sessions)]
+    ? [PANEL_W, page === "settings" ? SETTINGS_H : panelHeight(sessions)]
     : vertical ? [THICK, collapsedLength(sessions)] : [collapsedLength(sessions), THICK];
   const alongSize = vertical ? h : w;
   const a = clamp(along - alongSize / 2, 0, ENVELOPE - alongSize);

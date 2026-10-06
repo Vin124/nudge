@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
-const pages = ["notch", "settings", "glow", "avatar"];
+const pages = ["notch", "glow", "avatar"];
 
 export default defineConfig({
   clearScreen: false,

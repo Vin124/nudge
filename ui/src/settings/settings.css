@@ -1,49 +1,105 @@
-:root { color-scheme: dark; }
-html, body {
-  margin: 0;
-  background: #0b0b0c;
-  color: #e8e8ea;
-  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-.settings { max-width: 480px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-h1 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
-h2 { font-size: 12px; margin: 0 0 8px; font-weight: 600; color: #9a9a9e; text-transform: uppercase; letter-spacing: 0.04em; }
-.card { border: 1px solid #ffffff14; border-radius: 16px; padding: 12px 14px; background: #121214; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
-.row.toggle { cursor: pointer; }
-.stack { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.inline { display: inline-flex; align-items: center; gap: 8px; }
-.hint { color: #9a9a9e; font-size: 12px; margin: 6px 0 0; }
-.error { color: #ff8a00; font-size: 12px; margin: 4px 0 0; min-height: 0; }
-.error:empty { display: none; }
-.actions { display: flex; justify-content: flex-end; margin-top: 6px; }
-select, input[type="number"], .btn {
-  background: #1b1b1e; color: inherit; border: 1px solid #ffffff24; border-radius: 8px; padding: 4px 8px; font: inherit;
-}
-input[type="number"] { width: 72px; }
-select { max-width: 240px; }
-.btn { cursor: pointer; }
-.btn:hover { background: #26262a; }
-input[type="color"] { width: 36px; height: 24px; padding: 0; border: 1px solid #ffffff24; border-radius: 6px; background: none; }
-input[type="checkbox"] { width: 16px; height: 16px; accent-color: #3ddc84; }
-.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
-.chip { display: inline-flex; align-items: center; gap: 4px; background: #1b1b1e; border: 1px solid #ffffff24; border-radius: 9999px; padding: 2px 4px 2px 10px; }
-.chip-x { background: none; border: 0; color: #9a9a9e; cursor: pointer; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; line-height: 1; }
-.chip-x:hover { color: #fff; background: #ffffff1f; }
-:focus-visible { outline: 2px solid #5aa9ff; outline-offset: 2px; }
+/* D24: Settings rendered inside the expanded notch. Everything is scoped to
+   .settings-pane so it can't leak into the rest of the notch page. Uses the
+   notch tokens from notch.css (--text, --muted, --done, --ease-morph). */
 
-/* ---- D23: level picker + quiet Advanced disclosure ---- */
-.segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: #1b1b1e; border-radius: 10px; }
-.seg { border: 0; border-radius: 8px; padding: 6px 0; background: transparent; color: #9a9a9e; font: inherit; font-weight: 500; cursor: pointer; }
-.seg:hover { color: #e8e8ea; }
-.seg[aria-checked="true"] { background: #2c2c30; color: #f5f5f7; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
-.level-hint { min-height: 2.8em; }
-.advanced > summary {
-  list-style: none; cursor: pointer; width: fit-content; margin: 2px auto 0;
-  padding: 3px 10px; border-radius: 9999px; font-size: 11px; color: #6c6c70; letter-spacing: 0.02em;
+.settings-pane { font-size: 12.5px; line-height: 1.35; color: var(--text); }
+.settings-pane .settings { display: flex; flex-direction: column; gap: 10px; }
+.settings-pane h1 { display: none; }
+.settings-pane h2 {
+  margin: 0 0 6px 2px; font-size: 10.5px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
 }
-.advanced > summary::-webkit-details-marker { display: none; }
-.advanced > summary::after { content: " ▾"; font-size: 9px; }
-.advanced[open] > summary::after { content: " ▴"; }
-.advanced > summary:hover { color: #9a9a9e; background: #ffffff0a; }
-.advanced-body { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.settings-pane .card { background: rgba(255, 255, 255, 0.055); border-radius: 14px; padding: 9px 12px; }
+/* `.row` also styles the notch's session rows; reset everything those set. */
+.settings-pane .row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px;
+  height: auto; padding: 0; border-radius: 0; cursor: default; background: none;
+}
+.settings-pane .row:hover, .settings-pane .row:active { background: none; }
+.settings-pane .row + .row { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.settings-pane .row.toggle { cursor: pointer; }
+.settings-pane .stack { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.settings-pane .inline { display: inline-flex; align-items: center; gap: 8px; }
+.settings-pane .hint { color: var(--muted); font-size: 11px; margin: 6px 2px 0; line-height: 1.4; }
+.settings-pane .error { color: #ff9f0a; font-size: 11px; margin: 4px 0 0; }
+.settings-pane .error:empty { display: none; }
+.settings-pane .actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+
+/* controls */
+.settings-pane select, .settings-pane input[type="number"], .settings-pane .btn {
+  appearance: none; -webkit-appearance: none; font: inherit; color: var(--text);
+  background-color: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px; padding: 4px 9px; outline: none;
+  transition: background-color 150ms ease;
+}
+.settings-pane select {
+  max-width: 170px; padding-right: 22px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #8e8e93 50%), linear-gradient(135deg, #8e8e93 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-size: 4px 4px; background-repeat: no-repeat;
+}
+.settings-pane select option { background: #1c1c1e; color: var(--text); }
+.settings-pane select:hover, .settings-pane .btn:hover, .settings-pane input[type="number"]:hover { background-color: rgba(255, 255, 255, 0.13); }
+.settings-pane input[type="number"] { width: 56px; text-align: right; }
+.settings-pane .btn { cursor: pointer; font-weight: 500; }
+.settings-pane input[type="range"] { width: 120px; accent-color: #f5f5f7; }
+.settings-pane output { color: var(--muted); min-width: 32px; text-align: right; }
+.settings-pane input[type="color"] {
+  appearance: none; -webkit-appearance: none; width: 22px; height: 22px; padding: 0; border: 0;
+  border-radius: 50%; background: none; cursor: pointer;
+}
+.settings-pane input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.settings-pane input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(255, 255, 255, 0.18); border-radius: 50%; }
+
+/* iOS-style switch */
+.settings-pane input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; position: relative; flex: none; margin: 0;
+  width: 34px; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, 0.16);
+  cursor: pointer; transition: background 220ms var(--ease-morph);
+}
+.settings-pane input[type="checkbox"]::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); transition: transform 260ms var(--ease-morph);
+}
+.settings-pane input[type="checkbox"]:checked { background: var(--done); }
+.settings-pane input[type="checkbox"]:checked::after { transform: translateX(14px); }
+
+/* reminder chips */
+.settings-pane .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; }
+.settings-pane .chip {
+  display: inline-flex; align-items: center; gap: 2px; background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px; padding: 2px 3px 2px 9px; font-size: 11.5px;
+}
+.settings-pane .chip-x {
+  background: none; border: 0; color: var(--muted); cursor: pointer; border-radius: 50%;
+  width: 18px; height: 18px; font-size: 13px; line-height: 1;
+}
+.settings-pane .chip-x:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+
+/* D23 level picker */
+.settings-pane .segmented {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px;
+  background: rgba(255, 255, 255, 0.07); border-radius: 9px;
+}
+.settings-pane .seg {
+  border: 0; border-radius: 7px; padding: 5px 0; background: transparent; color: var(--muted);
+  font: inherit; font-weight: 500; cursor: pointer; transition: color 150ms ease, background 220ms var(--ease-morph);
+}
+.settings-pane .seg:hover { color: var(--text); }
+.settings-pane .seg[aria-checked="true"] { background: rgba(255, 255, 255, 0.16); color: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.settings-pane .level-hint { min-height: 2.8em; }
+
+/* quiet Advanced disclosure */
+.settings-pane .advanced > summary {
+  list-style: none; cursor: pointer; width: fit-content; margin: 0 auto;
+  padding: 3px 10px; border-radius: 9999px; font-size: 11px; color: rgba(255, 255, 255, 0.38);
+  transition: color 150ms ease, background 150ms ease;
+}
+.settings-pane .advanced > summary::-webkit-details-marker { display: none; }
+.settings-pane .advanced > summary::after { content: " ▾"; font-size: 9px; }
+.settings-pane .advanced[open] > summary::after { content: " ▴"; }
+.settings-pane .advanced > summary:hover { color: rgba(255, 255, 255, 0.75); background: rgba(255, 255, 255, 0.06); }
+.settings-pane .advanced-body { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.settings-pane .advanced[open] .advanced-body { animation: settings-reveal 320ms var(--ease-morph); }
+@keyframes settings-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.settings-pane :focus-visible { outline: 2px solid rgba(255, 255, 255, 0.5); outline-offset: 1px; }

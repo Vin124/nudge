@@ -17,6 +17,8 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewWindow}
 pub const LABEL: &str = "notch";
 pub const EVENT_HOVER: &str = "nudge://notch-hover";
 pub const EVENT_DROP: &str = "nudge://notch-drop";
+/// D24: Settings lives inside the expanded notch; the tray asks it to open.
+pub const EVENT_OPEN_SETTINGS: &str = "nudge://notch-open-settings";
 const HOVER_EVERY: Duration = Duration::from_millis(33);
 const FRAME: Duration = Duration::from_millis(8);
 
@@ -83,6 +85,14 @@ pub fn lerp_pos(a: Pos, b: Pos, t: f64) -> Pos {
 
 fn window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
+}
+
+/// D24: expand the notch onto its Settings page (tray menu / tray click).
+pub fn open_settings(app: &AppHandle) {
+    if let Some(w) = window(app) {
+        let _ = w.show();
+    }
+    let _ = app.emit_to(LABEL, EVENT_OPEN_SETTINGS, ());
 }
 
 /// The visible shape's screen rect (x, y, w, h, physical), for placing popups next to it.

@@ -3,8 +3,8 @@
 
 import type { Edge, Session, SessionState, Snapshot, UsageWindow } from "../shared/contracts";
 import { formatCountdown, formatElapsed, formatPercent, usageColor } from "./format";
-import { MAX_AVATARS, type Rect } from "./geometry";
-import { critter, gear, sparkle, svgEl } from "./icons";
+import { MAX_AVATARS, type Page, type Rect } from "./geometry";
+import { chevronLeft, critter, gear, sparkle, svgEl } from "./icons";
 
 export const NA_TOOLTIP =
   "Usage limits aren't available for API-key sessions — enable live usage in Settings";
@@ -217,6 +217,8 @@ export interface ViewOptions {
   onFocus: (id: string) => Promise<void>;
   /** D23: the small gear in the expanded panel. */
   onSettings: () => void;
+  /** D24: the back chevron on the Settings page. */
+  onBack: () => void;
 }
 
 export type Motion = "open" | "close" | "snap" | "none";
@@ -235,6 +237,10 @@ export interface NotchView {
   /** Picks the transition curve for the next `setRect`. */
   setMotion(motion: Motion): void;
   setRect(r: Rect): void;
+  /** D24: which page the expanded notch shows. */
+  setPage(page: Page): void;
+  /** D24: the Settings page body; the caller mounts the settings view here. */
+  settingsHost: HTMLElement;
   showRowMessage(id: string, text: string, ms?: number): void;
   sessionCount(): number;
 }
@@ -245,6 +251,7 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   shape.dataset.expanded = "false";
   shape.dataset.floating = "false";
   shape.dataset.motion = "none";
+  shape.dataset.page = "home";
   const earA = el("span", "ear ear-a");
   const earB = el("span", "ear ear-b");
   const body = el("div", "body");
@@ -273,7 +280,23 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   });
   panel.append(usage, list, empty, settings);
 
-  body.append(bar, panel);
+  // ---- D24: Settings page ----
+  const pane = el("div", "pane");
+  pane.setAttribute("aria-label", "Settings");
+  const paneHead = el("div", "pane-head");
+  const back = el("button", "back");
+  back.type = "button";
+  back.setAttribute("aria-label", "Back");
+  back.append(chevronLeft());
+  back.addEventListener("click", (e) => {
+    e.stopPropagation();
+    opts.onBack();
+  });
+  paneHead.append(back, el("div", "pane-title", "Settings"));
+  const settingsHost = el("div", "pane-scroll settings-pane");
+  pane.append(paneHead, settingsHost);
+
+  body.append(bar, panel, pane);
   shape.append(earA, earB, body);
   root.append(shape);
 
@@ -408,6 +431,11 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
       s.width = `${r.width}px`;
       s.height = `${r.height}px`;
     },
+    setPage(page: Page) {
+      setAttr(shape, "data-page", page);
+      if (page === "settings") settingsHost.scrollTop = 0;
+    },
+    settingsHost,
     showRowMessage,
     sessionCount: () => entries.size,
   };

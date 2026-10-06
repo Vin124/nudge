@@ -51,3 +51,10 @@ export function gear(cls = "gear-icon"): SVGSVGElement {
   svg.append(g);
   return svg;
 }
+
+/** Back chevron for the Settings page header. */
+export function chevronLeft(cls = "chevron-icon"): SVGSVGElement {
+  const svg = svgEl("svg", { viewBox: "0 0 24 24", class: cls, "aria-hidden": "true" });
+  svg.append(svgEl("path", { d: "M14.5 5.5 8 12l6.5 6.5", fill: "none", stroke: "currentColor", "stroke-width": 2.2, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+  return svg;
+}

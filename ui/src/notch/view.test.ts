@@ -32,13 +32,15 @@ let root: HTMLElement;
 let view: NotchView;
 let onFocus: ReturnType<typeof vi.fn>;
 let onSettings: ReturnType<typeof vi.fn>;
+let onBack: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   document.body.innerHTML = "<div id=app></div>";
   root = document.getElementById("app")!;
   onFocus = vi.fn(() => Promise.resolve());
   onSettings = vi.fn();
-  view = createView(root, { onFocus, onSettings });
+  onBack = vi.fn();
+  view = createView(root, { onFocus, onSettings, onBack });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -216,6 +218,20 @@ describe("settings gear", () => {
     view.shape.addEventListener("click", bubbled);
     (root.querySelector(".panel .gear") as HTMLButtonElement).click();
     expect(onSettings).toHaveBeenCalledTimes(1);
+    expect(bubbled).not.toHaveBeenCalled();
+  });
+});
+
+describe("settings page (D24)", () => {
+  it("switches pages and the back chevron calls onBack without bubbling", () => {
+    expect(view.shape.dataset.page).toBe("home");
+    view.setPage("settings");
+    expect(view.shape.dataset.page).toBe("settings");
+    expect(view.settingsHost.closest(".pane")).not.toBeNull();
+    const bubbled = vi.fn();
+    view.shape.addEventListener("click", bubbled);
+    (root.querySelector(".pane .back") as HTMLButtonElement).click();
+    expect(onBack).toHaveBeenCalledTimes(1);
     expect(bubbled).not.toHaveBeenCalled();
   });
 });

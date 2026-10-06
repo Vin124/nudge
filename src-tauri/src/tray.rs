@@ -7,9 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::AppHandle;
 
-const SETTINGS: &str = "settings";
 const ID_SETTINGS: &str = "open-settings";
 const ID_DND: &str = "dnd";
 const ID_P30: &str = "pause-30";
@@ -79,29 +78,6 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// D19: Settings is created on demand and destroyed on close (default close
-/// behavior), so its WebView2 renderer (~55-60 MB) only exists while it's open.
-pub(crate) fn show_settings(app: &AppHandle) {
-    let w = match app.get_webview_window(SETTINGS) {
-        Some(w) => w,
-        None => match WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App("settings.html".into()))
-            .title("Nudge Settings")
-            .inner_size(520.0, 640.0)
-            .resizable(true)
-            .build()
-        {
-            Ok(w) => w,
-            Err(e) => {
-                eprintln!("nudge: settings window: {e}");
-                return;
-            }
-        },
-    };
-    let _ = w.unminimize();
-    let _ = w.show();
-    let _ = w.set_focus();
-}
-
 fn set_dnd(core: &Core, on: bool) {
     let mut cfg = core.config();
     if cfg.dnd != on {
@@ -167,7 +143,7 @@ pub fn init(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
                 let _ = pm_ev.set_text(label(p, now_ms()));
             };
             match ev.id().as_ref() {
-                ID_SETTINGS => show_settings(app),
+                ID_SETTINGS => crate::notch::open_settings(app),
                 ID_DND => {
                     // A manual toggle takes ownership of DND away from any pause.
                     *pause_ev.lock().unwrap_or_else(|e| e.into_inner()) = Pause::default();
@@ -184,7 +160,7 @@ pub fn init(app: &AppHandle, core: Arc<Core>) -> tauri::Result<()> {
         })
         .on_tray_icon_event(|tray, ev| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
-                show_settings(tray.app_handle());
+                crate::notch::open_settings(tray.app_handle());
             }
         });
     if let Some(icon) = app.default_window_icon() {

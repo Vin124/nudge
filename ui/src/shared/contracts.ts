@@ -83,13 +83,13 @@ export const api = {
   previewAlert: (kind: AlertKind) => invoke<void>("preview_alert", { kind }),
   /** D6: folder names under ~/.nudge/avatars */
   listAvatarPacks: () => invoke<string[]>("list_avatar_packs"),
-  /** D23: open (or focus) the Settings window */
-  openSettings: () => invoke<void>("open_settings"),
 };
 
 /** D20: notch window mechanics (src-tauri/src/notch.rs). Rects are logical, window-relative. */
 export const EVENT_NOTCH_HOVER = "nudge://notch-hover";
 export const EVENT_NOTCH_DROP = "nudge://notch-drop";
+/** D24: tray asks the notch to open its Settings page. */
+export const EVENT_NOTCH_OPEN_SETTINGS = "nudge://notch-open-settings";
 
 export interface NotchRect { x: number; y: number; width: number; height: number }
 

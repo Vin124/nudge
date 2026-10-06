@@ -5,6 +5,7 @@ import {
   MAX_LEN,
   MIN_LEN,
   PANEL_W,
+  SETTINGS_H,
   panelHeight,
   placeWindow,
   resolveMonitor,
@@ -91,6 +92,19 @@ describe("shapeRect", () => {
     }
     expect(shapeRect("top", 200, true, 1).y).toBe(0);
     expect(shapeRect("right", 200, true, 1).x).toBe(ENVELOPE - PANEL_W);
+  });
+});
+
+describe("settings page (D24)", () => {
+  it("grows to SETTINGS_H inside the envelope on every edge, anchored like the panel", () => {
+    for (const edge of EDGES) {
+      const r = shapeRect(edge, 200, true, 2, "settings");
+      expect(r.height).toBe(SETTINGS_H);
+      expect(r.y + r.height).toBeLessThanOrEqual(ENVELOPE);
+      expect(r.x).toBe(shapeRect(edge, 200, true, 2).x);
+    }
+    expect(shapeRect("bottom", 200, true, 2, "settings").y).toBe(ENVELOPE - SETTINGS_H);
+    expect(shapeRect("top", 200, false, 2, "settings").height).toBe(THICK);
   });
 });
 

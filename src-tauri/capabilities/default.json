@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Nudge windows: notch, settings, glow-*, avatar",
-  "windows": ["notch", "settings", "glow-*", "avatar"],
+  "description": "Nudge windows: notch, glow-*, avatar",
+  "windows": ["notch", "glow-*", "avatar"],
   "permissions": [
     "core:default",
     "core:event:default",
