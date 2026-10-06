@@ -179,7 +179,15 @@ html, body {
   transition: opacity 260ms ease 140ms, transform 420ms var(--ease-morph) 100ms, filter 260ms ease 140ms;
 }
 
-.usage { display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 8px; box-sizing: border-box; flex: none; }
+/* D23: small gear that blends into the panel until hovered. */
+.gear {
+  position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; padding: 3px;
+  border: 0; border-radius: 50%; background: transparent; color: rgba(255, 255, 255, 0.28);
+  cursor: pointer; transition: color 150ms ease, background 150ms ease;
+}
+.gear:hover { color: rgba(255, 255, 255, 0.8); background: rgba(255, 255, 255, 0.08); }
+.gear .gear-icon { display: block; width: 16px; height: 16px; }
+.usage { display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 30px 0 8px; box-sizing: border-box; flex: none; }
 .usage-item { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .usage-item[hidden] { display: none; }
 .dial { position: relative; flex: none; width: 44px; height: 44px; color: var(--spark); }

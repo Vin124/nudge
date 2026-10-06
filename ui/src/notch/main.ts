@@ -25,7 +25,10 @@ const SNAP_MS = 280;
 
 const win = getCurrentWebviewWindow();
 const root = document.getElementById("app")!;
-const view = createView(root, { onFocus: (id) => api.focusSession(id) });
+const view = createView(root, {
+  onFocus: (id) => api.focusSession(id),
+  onSettings: () => void api.openSettings().catch(report("open settings")),
+});
 view.shape.classList.add("intro");
 
 let monitors: Monitor[] = [];

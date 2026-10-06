@@ -37,3 +37,17 @@ export function critter(cls = "face"): SVGSVGElement {
   );
   return svg;
 }
+
+/** Simple outline cog for the settings button. */
+export function gear(cls = "gear-icon"): SVGSVGElement {
+  const svg = svgEl("svg", { viewBox: "0 0 24 24", class: cls, "aria-hidden": "true" });
+  const g = svgEl("g", { fill: "none", stroke: "currentColor", "stroke-width": 1.8, "stroke-linecap": "round" });
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const f = (r: number, t: (x: number) => number) => (12 + t(a) * r).toFixed(2);
+    g.append(svgEl("line", { x1: f(7.2, Math.cos), y1: f(7.2, Math.sin), x2: f(9.6, Math.cos), y2: f(9.6, Math.sin) }));
+  }
+  g.append(svgEl("circle", { cx: 12, cy: 12, r: 6.2 }), svgEl("circle", { cx: 12, cy: 12, r: 2.4 }));
+  svg.append(g);
+  return svg;
+}

@@ -5,12 +5,16 @@
 import type { AlertKind, Config } from "../shared/contracts";
 import {
   addMinute,
+  applyLevel,
   clampPulses,
   configToForm,
+  detectLevel,
+  LEVELS,
   NO_SOUND,
   removeMinute,
   SOUNDS,
   type Form,
+  type Level,
   type StateForm,
 } from "./model";
 
@@ -21,6 +25,12 @@ export const DRAG_NOTE = "Drag the notch to move it.";
 export const AVATAR_HINT = "Custom packs: ~/.nudge/avatars/<name>/done.png|gif|svg, blocked.*";
 export const DEFAULT_VOICE_TEXT = "System default";
 export const BUILTIN_PACK_TEXT = "Built-in mascot";
+export const LEVEL_TEXT: Record<Level, [string, string]> = {
+  quiet: ["Quiet", "Notch rings, plus a soft sound when a session needs you."],
+  normal: ["Normal", "Glow, sound and the fox. Speaks and reminds you when a session needs you."],
+  loud: ["Loud", "Everything for both, with reminders every 2 minutes until you look."],
+};
+export const CUSTOM_TEXT = "Custom — your own mix from Advanced.";
 
 export interface ViewDeps {
   /** Called with the full form after every user edit. */
@@ -72,8 +82,36 @@ export function createView(root: HTMLElement, deps: ViewDeps): SettingsView {
   let voiceNames: string[] = [];
 
   const emit = () => {
+    refreshLevel();
     if (form) deps.onChange(structuredClone(form));
   };
+
+  // ---- Notification level (D23) ----
+  const levelBtns = new Map<Level, HTMLButtonElement>();
+  const levelHint = h("p", { class: "hint level-hint" });
+  const seg = h("div", { class: "segmented" });
+  seg.setAttribute("role", "radiogroup");
+  seg.setAttribute("aria-label", "Notification level");
+  for (const lv of LEVELS) {
+    const b = h("button", { type: "button", class: "seg", textContent: LEVEL_TEXT[lv][0] });
+    b.setAttribute("role", "radio");
+    b.dataset.level = lv;
+    b.addEventListener("click", () => {
+      if (!form) return;
+      form = applyLevel(form, lv);
+      for (const x of bindings) x.write(form);
+      renderChips();
+      emit();
+    });
+    levelBtns.set(lv, b);
+    seg.append(b);
+  }
+  function refreshLevel(): void {
+    const lv = form ? detectLevel(form) : "custom";
+    for (const [k, b] of levelBtns) b.setAttribute("aria-checked", String(k === lv));
+    levelHint.textContent = lv === "custom" ? CUSTOM_TEXT : LEVEL_TEXT[lv][1];
+  }
+  const levelCard = h("section", { class: "card" }, h("h2", { textContent: "Notifications" }), seg, levelHint);
 
   /** Register a control: on user input, read it into `form` then emit. */
   function bind<E extends HTMLInputElement | HTMLSelectElement>(
@@ -300,16 +338,27 @@ export function createView(root: HTMLElement, deps: ViewDeps): SettingsView {
     toggle("Do Not Disturb", (f) => f.dnd, (f, v) => (f.dnd = v)),
   );
 
-  root.replaceChildren(
-    h("main", { class: "settings" },
-      h("h1", { textContent: "Nudge settings" }),
-      notch,
+  // Everything per-channel lives behind a quiet disclosure (D23).
+  const advanced = h(
+    "details",
+    { class: "advanced" },
+    h("summary", { textContent: "Advanced" }),
+    h("div", { class: "advanced-body" },
       stateSection("done", "When a session finishes"),
       stateSection("blocked", "When a session needs you"),
       alerts,
       avatar,
-      usage,
+    ),
+  );
+
+  root.replaceChildren(
+    h("main", { class: "settings" },
+      h("h1", { textContent: "Nudge settings" }),
+      levelCard,
       dnd,
+      notch,
+      usage,
+      advanced,
     ),
   );
 
@@ -330,6 +379,7 @@ export function createView(root: HTMLElement, deps: ViewDeps): SettingsView {
       form = next;
       for (const b of bindings) if (b.el !== active) b.write(next);
       renderChips();
+      refreshLevel();
     },
     setPacks(names) {
       packNames = names;

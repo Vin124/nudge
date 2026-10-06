@@ -97,6 +97,7 @@ pub fn run() {
             commands::set_config,
             commands::preview_alert,
             commands::list_avatar_packs,
+            commands::open_settings,
             notch::notch_set_hit,
             notch::notch_drag_start,
             notch::notch_drag_end,

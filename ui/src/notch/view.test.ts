@@ -31,12 +31,14 @@ const NOW = 1_000_000 * 1000;
 let root: HTMLElement;
 let view: NotchView;
 let onFocus: ReturnType<typeof vi.fn>;
+let onSettings: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   document.body.innerHTML = "<div id=app></div>";
   root = document.getElementById("app")!;
   onFocus = vi.fn(() => Promise.resolve());
-  view = createView(root, { onFocus });
+  onSettings = vi.fn();
+  view = createView(root, { onFocus, onSettings });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -205,6 +207,16 @@ describe("safety and keyed updates", () => {
     expect(root.querySelector(".row-since")!.textContent).toBe("1m");
     view.tick(NOW + 3600_000);
     expect(root.querySelector(".row-since")!.textContent).toBe("1h 1m");
+  });
+});
+
+describe("settings gear", () => {
+  it("opens settings without bubbling to the notch", () => {
+    const bubbled = vi.fn();
+    view.shape.addEventListener("click", bubbled);
+    (root.querySelector(".panel .gear") as HTMLButtonElement).click();
+    expect(onSettings).toHaveBeenCalledTimes(1);
+    expect(bubbled).not.toHaveBeenCalled();
   });
 });
 

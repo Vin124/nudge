@@ -83,6 +83,8 @@ export const api = {
   previewAlert: (kind: AlertKind) => invoke<void>("preview_alert", { kind }),
   /** D6: folder names under ~/.nudge/avatars */
   listAvatarPacks: () => invoke<string[]>("list_avatar_packs"),
+  /** D23: open (or focus) the Settings window */
+  openSettings: () => invoke<void>("open_settings"),
 };
 
 /** D20: notch window mechanics (src-tauri/src/notch.rs). Rects are logical, window-relative. */

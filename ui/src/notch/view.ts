@@ -4,7 +4,7 @@
 import type { Edge, Session, SessionState, Snapshot, UsageWindow } from "../shared/contracts";
 import { formatCountdown, formatElapsed, formatPercent, usageColor } from "./format";
 import { MAX_AVATARS, type Rect } from "./geometry";
-import { critter, sparkle, svgEl } from "./icons";
+import { critter, gear, sparkle, svgEl } from "./icons";
 
 export const NA_TOOLTIP =
   "Usage limits aren't available for API-key sessions — enable live usage in Settings";
@@ -215,6 +215,8 @@ interface Entry {
 export interface ViewOptions {
   /** Called when a row is clicked. A rejection shows the inline row message. */
   onFocus: (id: string) => Promise<void>;
+  /** D23: the small gear in the expanded panel. */
+  onSettings: () => void;
 }
 
 export type Motion = "open" | "close" | "snap" | "none";
@@ -260,7 +262,16 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   usage.append(u5.el, u7.el);
   const list = el("div", "list");
   const empty = el("div", "empty-state", EMPTY_TEXT);
-  panel.append(usage, list, empty);
+  const settings = el("button", "gear");
+  settings.type = "button";
+  settings.title = "Settings";
+  settings.setAttribute("aria-label", "Settings");
+  settings.append(gear());
+  settings.addEventListener("click", (e) => {
+    e.stopPropagation();
+    opts.onSettings();
+  });
+  panel.append(usage, list, empty, settings);
 
   body.append(bar, panel);
   shape.append(earA, earB, body);

@@ -81,7 +81,7 @@ fn now_ms() -> u64 {
 
 /// D19: Settings is created on demand and destroyed on close (default close
 /// behavior), so its WebView2 renderer (~55-60 MB) only exists while it's open.
-fn show_settings(app: &AppHandle) {
+pub(crate) fn show_settings(app: &AppHandle) {
     let w = match app.get_webview_window(SETTINGS) {
         Some(w) => w,
         None => match WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App("settings.html".into()))

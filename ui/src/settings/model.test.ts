@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../shared/contracts";
-import { addMinute, configToForm, debounce, formToConfig, normalizeMinutes, parseMinute } from "./model";
+import { addMinute, configToForm, debounce, formToConfig, normalizeMinutes, parseMinute, applyLevel, detectLevel, LEVELS } from "./model";
 
 const cfg = (): Config => ({
   version: 1,
@@ -81,5 +81,24 @@ describe("debounce", () => {
     d.cancel();
     vi.advanceTimersByTime(1000);
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("levels (D23)", () => {
+  it("every preset round-trips through detectLevel", () => {
+    const base = configToForm(cfg());
+    for (const lv of LEVELS) expect(detectLevel(applyLevel(base, lv))).toBe(lv);
+  });
+  it("leaves personal settings alone", () => {
+    const base = configToForm(cfg());
+    const q = applyLevel(base, "quiet");
+    expect(q.done.color).toBe(base.done.color);
+    expect(q.volume).toBe(base.volume);
+    expect(q.mascotMode).toBe(base.mascotMode);
+    expect(q.avatarPack).toBe(base.avatarPack);
+  });
+  it("anything off-preset is custom", () => {
+    const f = applyLevel(configToForm(cfg()), "loud");
+    expect(detectLevel({ ...f, escalateMinutes: [3] })).toBe("custom");
   });
 });

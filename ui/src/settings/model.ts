@@ -99,6 +99,79 @@ export function parseMinute(raw: string | number): number | null {
   return n;
 }
 
+// ---- notification levels (D23) ----
+// A level is a preset over the "how loud" fields only. Colors, volume, voice,
+// mascot style and avatar pack are personal and never touched by a level.
+// The level is derived from the form, not stored: any manual change that
+// doesn't match a preset reads as "custom".
+
+export type Level = "quiet" | "normal" | "loud";
+export const LEVELS: readonly Level[] = ["quiet", "normal", "loud"];
+
+interface Loudness {
+  glow: boolean;
+  sound: string;
+  tts: boolean;
+  avatar: boolean;
+}
+interface Preset {
+  done: Loudness;
+  blocked: Loudness;
+  escalateMinutes: number[];
+  glowPulses: number;
+}
+
+/** `normal` must equal the Rust defaults (src-tauri/src/config.rs). */
+export const PRESETS: Record<Level, Preset> = {
+  quiet: {
+    done: { glow: false, sound: NO_SOUND, tts: false, avatar: false },
+    blocked: { glow: false, sound: "bell", tts: false, avatar: false },
+    escalateMinutes: [],
+    glowPulses: 3,
+  },
+  normal: {
+    done: { glow: true, sound: "chime", tts: false, avatar: true },
+    blocked: { glow: true, sound: "alarm", tts: true, avatar: true },
+    escalateMinutes: [2, 5],
+    glowPulses: 3,
+  },
+  loud: {
+    done: { glow: true, sound: "chime", tts: true, avatar: true },
+    blocked: { glow: true, sound: "alarm", tts: true, avatar: true },
+    escalateMinutes: [2, 4, 6, 8, 10],
+    glowPulses: 6,
+  },
+};
+
+export function applyLevel(f: Form, level: Level): Form {
+  const p = PRESETS[level];
+  return {
+    ...f,
+    done: { ...f.done, ...p.done },
+    blocked: { ...f.blocked, ...p.blocked },
+    escalateMinutes: [...p.escalateMinutes],
+    glowPulses: p.glowPulses,
+  };
+}
+
+const sameLoudness = (s: StateForm, l: Loudness) =>
+  s.glow === l.glow && s.sound === l.sound && s.tts === l.tts && s.avatar === l.avatar;
+
+/** The preset the form matches exactly, or "custom". */
+export function detectLevel(f: Form): Level | "custom" {
+  const hit = LEVELS.find((lv) => {
+    const p = PRESETS[lv];
+    return (
+      sameLoudness(f.done, p.done) &&
+      sameLoudness(f.blocked, p.blocked) &&
+      f.glowPulses === p.glowPulses &&
+      f.escalateMinutes.length === p.escalateMinutes.length &&
+      f.escalateMinutes.every((m, i) => m === p.escalateMinutes[i])
+    );
+  });
+  return hit ?? "custom";
+}
+
 /** Mirror of the server's sanitize: keep valid, dedupe, sort, cap at 5. */
 export function normalizeMinutes(list: readonly number[]): number[] {
   const ok = list.filter((m) => Number.isInteger(m) && m >= MIN_MINUTE && m <= MAX_MINUTE);

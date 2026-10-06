@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../shared/contracts";
 import type { Form } from "./model";
-import { createView, USAGE_DISCLOSURE, type SettingsView } from "./view";
+import { createView, CUSTOM_TEXT, LEVEL_TEXT, USAGE_DISCLOSURE, type SettingsView } from "./view";
 
 const cfg = (over: Partial<Config["alerts"]> = {}): Config => ({
   version: 1,
@@ -39,7 +39,8 @@ describe("settings view", () => {
   it("renders every section and the verbatim usage disclosure", () => {
     const titles = [...root.querySelectorAll("h2")].map((h) => h.textContent);
     expect(titles).toEqual([
-      "Notch", "When a session finishes", "When a session needs you", "Alerts", "Avatar", "Usage", "Do Not Disturb",
+      "Notifications", "Do Not Disturb", "Notch", "Usage",
+      "When a session finishes", "When a session needs you", "Alerts", "Avatar",
     ]);
     expect(root.textContent).toContain(USAGE_DISCLOSURE);
     expect(root.textContent).toContain("Drag the notch to move it.");
@@ -98,9 +99,45 @@ describe("settings view", () => {
   });
 
   it("editing a toggle emits the full form", () => {
-    const cb = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const row = [...root.querySelectorAll("label.toggle")].find((l) => l.textContent === "Show weekly wheel")!;
+    const cb = row.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     cb.checked = false;
     cb.dispatchEvent(new Event("change"));
     expect(onChange.mock.lastCall![0].showWeekly).toBe(false);
+  });
+});
+
+describe("notification levels (D23)", () => {
+  const checked = () => root.querySelector('.seg[aria-checked="true"]') as HTMLElement | null;
+  const seg = (lv: string) => root.querySelector(`.seg[data-level="${lv}"]`) as HTMLButtonElement;
+
+  it("reads the default config as Normal", () => {
+    expect(checked()!.dataset.level).toBe("normal");
+    expect(root.querySelector(".level-hint")!.textContent).toBe(LEVEL_TEXT.normal[1]);
+  });
+
+  it("applying Quiet sets the per-channel controls and saves", () => {
+    seg("quiet").click();
+    const f = onChange.mock.calls.at(-1)![0];
+    expect(f.done).toMatchObject({ glow: false, sound: "none", tts: false, avatar: false });
+    expect(f.blocked.sound).toBe("bell");
+    expect(f.escalateMinutes).toEqual([]);
+    expect(f.done.color).toBe("#3ddc84");
+    expect(checked()!.dataset.level).toBe("quiet");
+  });
+
+  it("a manual change in Advanced reads as Custom", () => {
+    const glow = root.querySelector(".advanced input[type=checkbox]") as HTMLInputElement;
+    glow.checked = !glow.checked;
+    glow.dispatchEvent(new Event("change"));
+    expect(checked()).toBeNull();
+    expect(root.querySelector(".level-hint")!.textContent).toBe(CUSTOM_TEXT);
+  });
+
+  it("keeps the per-channel settings in a closed Advanced section", () => {
+    const adv = root.querySelector("details.advanced") as HTMLDetailsElement;
+    expect(adv.open).toBe(false);
+    expect(adv.querySelector("summary")!.textContent).toBe("Advanced");
+    expect(adv.textContent).toContain("When a session finishes");
   });
 });
