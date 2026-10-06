@@ -133,6 +133,8 @@ html, body {
 .avatar:not(.ctx) .arc { stroke-dasharray: none; stroke-dashoffset: 0; }
 .avatar .track { stroke: transparent; }
 .avatar.ctx .track { stroke: rgba(255, 255, 255, 0.13); }
+/* Idle gray is too faint to read as a gauge; brighten only the fill. */
+.avatar.ctx.state-idle .arc { stroke: rgba(255, 255, 255, 0.62); }
 .avatar.state-idle .face { opacity: 0.7; }
 .avatar.state-done .arc { stroke: var(--done); }
 .avatar.state-blocked .arc { stroke: var(--blocked); }

@@ -4,7 +4,7 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
+    "build": "cargo build --release -p nudge-hook -p nudge-status && tauri build",
     "test": "cargo test --workspace && npm --prefix ui test",
     "typecheck": "npm --prefix ui run typecheck"
   },
