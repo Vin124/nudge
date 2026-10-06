@@ -21,10 +21,12 @@ jobs:
           - os: windows-latest
             target: windows-x86_64
             rust: x86_64-pc-windows-msvc
-          - os: macos-14
+          # Both Mac targets build on the Apple Silicon image; Intel is cross-compiled
+          # (the Intel macos-13 image is retired).
+          - os: macos-latest
             target: macos-aarch64
             rust: aarch64-apple-darwin
-          - os: macos-13
+          - os: macos-latest
             target: macos-x86_64
             rust: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
