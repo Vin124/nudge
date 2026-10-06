@@ -6,7 +6,7 @@ context window, and pulls you back (edge glow, a sound or voice, a little pixel
 fox) the moment a session finishes or needs your permission. So you can stop
 doom-scrolling while you wait.
 
-**[Website and live demo →](https://nudge-notch.vercel.app)**
+**[Website and live demo →](https://trynudge.lol)**
 
 - **Live sessions.** One ring per session: white running, orange needs you, green done, grey idle. Each ring fills with that session's context-window use.
 - **Usage at a glance.** 5-hour and weekly limits from Claude Code's own statusline data.
