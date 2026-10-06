@@ -53,7 +53,7 @@ jobs:
       - name: Build app
         shell: bash
         env:
-          # Optional signing/notarization; builds unsigned when secrets are absent.
+          # Optional signing/notarization; builds unsigned when these secrets are unset.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -61,6 +61,12 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Missing secrets arrive as empty strings, and tauri treats an empty
+          # APPLE_CERTIFICATE as "sign" and fails. Unset the empty ones so an
+          # unconfigured repo builds unsigned.
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!v:-}" ] || unset "$v"
+          done
           if [ "${{ runner.os }}" = "macOS" ]; then
             npx tauri build --target ${{ matrix.rust }} --bundles app
           else
