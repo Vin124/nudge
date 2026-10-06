@@ -8,6 +8,12 @@ doom-scrolling while you wait.
 
 **[Website and live demo →](https://trynudge.lol)**
 
+<p align="center">
+  <a href="docs/media/nudge-demo.mp4"><img src="docs/media/nudge-demo.gif" width="760" alt="Nudge demo: a notch at the top of the screen tracks Claude Code sessions, and a pixel fox peeks out when one is done or needs you"></a>
+  <br>
+  <sub>▶ <a href="docs/media/nudge-demo.mp4">Watch the 20-second demo with sound</a></sub>
+</p>
+
 - **Live sessions.** One ring per session: white running, orange needs you, green done, grey idle. Each ring fills with that session's context-window use.
 - **Usage at a glance.** 5-hour and weekly limits from Claude Code's own statusline data.
 - **A fox that taps you on the shoulder.** It peeks out from behind the notch (or pops in at screen center) when a session is done or needs you.
