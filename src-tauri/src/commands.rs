@@ -20,8 +20,8 @@ pub fn ack_session(core: State<'_, Arc<Core>>, id: String) {
 #[tauri::command]
 pub fn focus_session(core: State<'_, Arc<Core>>, id: String) -> Result<(), String> {
     core.ack(&id);
-    let ancestors = core.session_ancestors(&id).ok_or("unknown session")?;
-    crate::focus::focus_session(&ancestors)
+    let (ancestors, cwd) = core.session_focus_target(&id).ok_or("unknown session")?;
+    crate::focus::focus_session(&ancestors, &cwd)
 }
 
 #[tauri::command]

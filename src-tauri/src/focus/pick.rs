@@ -42,9 +42,60 @@ pub fn candidates(ancestors: &[ProcInfo]) -> Vec<u32> {
     out
 }
 
+/// Index of the window whose title names the session's folder, else 0 (z-order front).
+/// One host process often owns many windows (VS Code, Windows Terminal), and editors
+/// title them "file - folder - App". Folders are tried deepest first, so a session
+/// in a subfolder still finds the window opened on its parent workspace.
+pub fn best_window(titles: &[String], cwd: &str) -> usize {
+    let folders: Vec<String> =
+        cwd.split(['/', '\\']).filter(|c| !c.is_empty() && !c.ends_with(':')).map(str::to_lowercase).collect();
+    let names_folder = |title: &str, folder: &str| {
+        title.to_lowercase().split(" - ").map(str::trim).any(|seg| {
+            // "proj [WSL: Ubuntu]", "proj (Workspace)"
+            seg == folder || seg.strip_prefix(folder).is_some_and(|r| r.starts_with(" [") || r.starts_with(" ("))
+        })
+    };
+    folders.iter().rev().find_map(|f| titles.iter().position(|t| names_folder(t, f))).unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn titles(t: &[&str]) -> Vec<String> {
+        t.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn picks_the_vscode_window_for_the_session_folder() {
+        // Real titles: five windows, all owned by one Code.exe, wrong one in front.
+        let t = titles(&[
+            ".env.example - cluely - Visual Studio Code",
+            "Welcome - ML4FG - Visual Studio Code",
+            "brag.mp4 - claude-noti - Visual Studio Code",
+            "msr-undergrad-essays.md - internship 2027 - Visual Studio Code",
+        ]);
+        assert_eq!(best_window(&t, "C:\\Users\\Vin\\Documents\\claude-noti"), 2);
+        assert_eq!(best_window(&t, "C:\\Users\\Vin\\internship 2027\\"), 3);
+        // Subfolder session: falls back to the workspace folder above it.
+        assert_eq!(best_window(&t, "C:\\Users\\Vin\\Documents\\claude-noti\\src-tauri"), 2);
+    }
+
+    #[test]
+    fn falls_back_to_front_window() {
+        let t = titles(&["✳ Claude Code", "pwsh"]);
+        assert_eq!(best_window(&t, "C:\\work\\api"), 0);
+        assert_eq!(best_window(&[], "C:\\work\\api"), 0);
+        assert_eq!(best_window(&t, ""), 0);
+    }
+
+    #[test]
+    fn no_substring_false_positives_and_suffixes_ok() {
+        let t = titles(&["a.rs - api-v2 - Cursor", "b.rs - api [WSL: Ubuntu] - Visual Studio Code"]);
+        assert_eq!(best_window(&t, "/home/u/api"), 1);
+        let ws = titles(&["x - other - Visual Studio Code", "x - Proj (Workspace) - Visual Studio Code"]);
+        assert_eq!(best_window(&ws, "/p/proj"), 1);
+    }
 
     fn chain(names: &[&str]) -> Vec<ProcInfo> {
         names.iter().enumerate().map(|(i, n)| ProcInfo { pid: 100 + i as u32, name: (*n).into() }).collect()

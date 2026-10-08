@@ -6,7 +6,7 @@ use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP, KEYBD_EVENT_FLAGS, VK_MENU};
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongW, GetWindowThreadProcessId, IsIconic,
+    BringWindowToTop, EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongW, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
     IsWindowVisible, SetForegroundWindow, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, WS_EX_TOOLWINDOW,
 };
 
@@ -42,19 +42,34 @@ fn windows_terminal_pids() -> Vec<u32> {
         .collect()
 }
 
-/// First window (in z-order) owned by the best-ranked candidate pid.
-fn first_window_of(wins: &[(HWND, u32)], pids: &[u32]) -> Option<HWND> {
-    pids.iter().find_map(|pid| wins.iter().find(|(_, p)| p == pid).map(|(h, _)| *h))
+fn title(hwnd: HWND) -> String {
+    let mut buf = [0u16; 512];
+    // SAFETY: buf outlives the call and its length bounds the write.
+    let n = unsafe { GetWindowTextW(hwnd, &mut buf) };
+    String::from_utf16_lossy(&buf[..n.max(0) as usize])
 }
 
-pub fn focus(candidates: &[u32]) -> Result<(), String> {
+/// The best-ranked candidate pid that owns a window; among that pid's windows,
+/// the one titled with the session's folder, else the frontmost.
+fn window_for(wins: &[(HWND, u32)], pids: &[u32], cwd: &str) -> Option<HWND> {
+    pids.iter().find_map(|pid| {
+        let mine: Vec<HWND> = wins.iter().filter(|(_, p)| p == pid).map(|(h, _)| *h).collect();
+        if mine.is_empty() {
+            return None;
+        }
+        let titles: Vec<String> = mine.iter().map(|h| title(*h)).collect();
+        Some(mine[pick::best_window(&titles, cwd)])
+    })
+}
+
+pub fn focus(candidates: &[u32], cwd: &str) -> Result<(), String> {
     let wins = app_windows();
-    let hwnd = match first_window_of(&wins, candidates) {
+    let hwnd = match window_for(&wins, candidates, cwd) {
         Some(h) => h,
         None => {
             // WT caveat: the chain may stop at OpenConsole / a re-parented shell.
             // z-order puts the most recently active WT window first.
-            let h = first_window_of(&wins, &windows_terminal_pids()).ok_or("no terminal window found")?;
+            let h = window_for(&wins, &windows_terminal_pids(), cwd).ok_or("no terminal window found")?;
             eprintln!("nudge: focus: no ancestor window, fell back to the frontmost Windows Terminal window");
             h
         }

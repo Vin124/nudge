@@ -108,8 +108,9 @@ impl Core {
         self.lock().sessions.snapshot().iter().filter_map(|s| s.claude_pid).collect()
     }
 
-    pub fn session_ancestors(&self, id: &str) -> Option<Vec<ProcInfo>> {
-        self.lock().sessions.get(id).map(|s| s.ancestors.clone())
+    /// What focus needs: the hook's process ancestors and the session's cwd.
+    pub fn session_focus_target(&self, id: &str) -> Option<(Vec<ProcInfo>, String)> {
+        self.lock().sessions.get(id).map(|s| (s.ancestors.clone(), s.cwd.clone()))
     }
 
     pub fn apply_poll(&self, five: Option<UsageWindow>, seven: Option<UsageWindow>, ts_ms: u64) {
