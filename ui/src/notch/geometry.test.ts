@@ -7,6 +7,7 @@ import {
   PANEL_W,
   SETTINGS_H,
   panelHeight,
+  monitorsKey,
   placeWindow,
   resolveMonitor,
   shapeRect,
@@ -158,5 +159,21 @@ describe("resolveMonitor", () => {
   });
   it("falls back to the first monitor when there is no primary", () => {
     expect(resolveMonitor([a, b], "GONE", null)).toBe(a);
+  });
+});
+
+describe("monitorsKey", () => {
+  const a = mon({ name: "A" });
+  const b = mon({ name: "B", x: 1920 });
+  it("is stable for the same layout", () => {
+    expect(monitorsKey([a, b], a)).toBe(monitorsKey([mon({ name: "A" }), mon({ name: "B", x: 1920 })], mon({ name: "A" })));
+  });
+  it("changes when a monitor is unplugged", () => {
+    expect(monitorsKey([a], a)).not.toBe(monitorsKey([a, b], a));
+  });
+  it("changes when the primary, bounds or scale change", () => {
+    expect(monitorsKey([a, b], b)).not.toBe(monitorsKey([a, b], a));
+    expect(monitorsKey([a, mon({ name: "B", x: 2560 })], a)).not.toBe(monitorsKey([a, b], a));
+    expect(monitorsKey([a, mon({ name: "B", x: 1920, scale: 2 })], a)).not.toBe(monitorsKey([a, b], a));
   });
 });

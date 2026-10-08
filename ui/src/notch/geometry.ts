@@ -74,6 +74,12 @@ export function monitorAt(monitors: Monitor[], p: Point): Monitor {
   return monitors.reduce((best, m) => (distanceTo(m, p) < distanceTo(best, p) ? m : best));
 }
 
+/** Identity of the display layout; it changes when a monitor is plugged, unplugged, moved or rescaled. */
+export function monitorsKey(monitors: Monitor[], primary: Monitor | null): string {
+  const id = (m: Monitor) => `${m.name}@${m.x},${m.y},${m.width}x${m.height}*${m.scale}`;
+  return `${monitors.map(id).join("|")}#${primary ? id(primary) : ""}`;
+}
+
 /** Named monitor, else the primary, else the first. (AC #7) */
 export function resolveMonitor(monitors: Monitor[], name: string | null, primary: Monitor | null): Monitor {
   const byName = name == null ? undefined : monitors.find((m) => m.name === name);

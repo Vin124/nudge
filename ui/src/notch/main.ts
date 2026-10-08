@@ -15,7 +15,7 @@ import {
   type Snapshot,
 } from "../shared/contracts";
 import { mountSettings, type SettingsController } from "../settings/controller";
-import { placeWindow, resolveMonitor, shapeRect, snapToEdge, type Monitor, type Page, type Point } from "./geometry";
+import { monitorsKey, placeWindow, resolveMonitor, shapeRect, snapToEdge, type Monitor, type Page, type Point } from "./geometry";
 import { createView, type Motion } from "./view";
 import "./notch.css";
 import "../settings/settings.css";
@@ -25,6 +25,8 @@ const HOVER_CLOSE_MS = 320;
 const DRAG_THRESHOLD_PX = 4;
 /** Must match the `snap` duration in notch.css. */
 const SNAP_MS = 280;
+/** How often to check for plugged / unplugged monitors (no Tauri event for it). */
+const MONITOR_POLL_MS = 2000;
 
 const win = getCurrentWebviewWindow();
 const root = document.getElementById("app")!;
@@ -68,6 +70,14 @@ async function refreshMonitors(): Promise<void> {
   const [all, prim] = await Promise.all([availableMonitors(), primaryMonitor()]);
   monitors = all.map(toMonitor);
   primary = prim ? toMonitor(prim) : null;
+}
+
+/** Re-place the notch when the display layout changes, e.g. its monitor was unplugged (AC #7). */
+async function watchMonitors(): Promise<void> {
+  const before = monitorsKey(monitors, primary);
+  await refreshMonitors();
+  if (!placed || dragging) return;
+  if (monitorsKey(monitors, primary) !== before) layout("snap", SNAP_MS);
 }
 
 /** Push the current shape rect to the DOM (animated by `motion`) and to the hit test. */
@@ -292,6 +302,7 @@ async function main(): Promise<void> {
   await win.listen<Point>(EVENT_NOTCH_DROP, (e) => void onDrop(e.payload));
   await win.listen(EVENT_NOTCH_OPEN_SETTINGS, () => openSettings());
   await onSnapshot(onSnap);
+  setInterval(() => void watchMonitors().catch(report("watch monitors")), MONITOR_POLL_MS);
 }
 
 main().catch(report("init"));
