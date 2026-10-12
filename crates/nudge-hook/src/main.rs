@@ -7,7 +7,7 @@
 //! - always exits 0 — bad JSON, app down, timeout and panics included;
 //! - stderr only when `NUDGE_DEBUG=1`.
 
-use nudge_proto::{ancestors, now_ms, post, HookEnvelope, MAX_BODY_BYTES, PATH_HOOK, PROTOCOL_VERSION};
+use nudge_proto::{ancestors, now_ms, post, Agent, HookEnvelope, MAX_BODY_BYTES, PATH_HOOK, PROTOCOL_VERSION};
 use serde_json::{Map, Value};
 use std::io::Read;
 use std::time::Instant;
@@ -72,7 +72,7 @@ fn build_body(stdin: &[u8]) -> Option<Vec<u8>> {
     let t = Instant::now();
     let ancestors = ancestors_for(event);
     dbg_err!("ancestors: {} entries in {:?}", ancestors.len(), t.elapsed());
-    let env = HookEnvelope { v: PROTOCOL_VERSION, ts_ms: now_ms(), ancestors, payload };
+    let env = HookEnvelope { v: PROTOCOL_VERSION, ts_ms: now_ms(), agent: Agent::Claude, ancestors, payload };
     let body = serde_json::to_vec(&env).ok()?;
     if body.len() >= MAX_BODY_BYTES {
         dbg_err!("envelope too large ({} bytes), dropped", body.len());

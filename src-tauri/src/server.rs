@@ -123,6 +123,7 @@ mod tests {
         serde_json::to_vec(&HookEnvelope {
             v: PROTOCOL_VERSION,
             ts_ms: 1,
+            agent: Default::default(),
             ancestors: vec![],
             payload: serde_json::json!({"hook_event_name": "Stop", "session_id": "a"}),
         })
@@ -133,7 +134,7 @@ mod tests {
     fn accepts_authed_hook_and_status() {
         let (rt, seen) = spawn();
         assert_eq!(post_to(&rt, PATH_HOOK, &hook_body(), T).unwrap(), 204);
-        let st = StatusEnvelope { v: 1, ts_ms: 1, session_id: Some("s".into()), rate_limits_available: None, rate_limits: None, context_used_percentage: None };
+        let st = StatusEnvelope { v: 1, ts_ms: 1, session_id: Some("s".into()), rate_limits_available: None, rate_limits: None, context_used_percentage: None, agent: Default::default(), limit_windows: None };
         assert_eq!(post_to(&rt, PATH_STATUS, &serde_json::to_vec(&st).unwrap(), T).unwrap(), 204);
         assert_eq!(*seen.lock().unwrap(), vec!["hook:\"Stop\"".to_string(), "status:Some(\"s\")".to_string()]);
     }

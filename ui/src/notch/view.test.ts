@@ -20,11 +20,11 @@ const usage = (over: Partial<UsageSnapshot> = {}): UsageSnapshot => ({
 });
 
 const sess = (id: string, over: Partial<Session> = {}): Session => ({
-  id, project: `proj-${id}`, cwd: `/x/${id}`, state: "idle", sinceMs: 0, alertPending: false, contextPercent: null, ...over,
+  id, agent: "claude", project: `proj-${id}`, cwd: `/x/${id}`, state: "idle", sinceMs: 0, alertPending: false, contextPercent: null, ...over,
 });
 
 const snap = (sessions: Session[], u = usage(), showWeekly = true): Snapshot => ({
-  sessions, usage: u, config: config(showWeekly),
+  sessions, usage: u, codexUsage: null, config: config(showWeekly),
 });
 
 const NOW = 1_000_000 * 1000;

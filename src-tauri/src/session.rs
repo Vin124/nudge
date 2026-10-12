@@ -1,7 +1,7 @@
 //! Session state machine (spec §Session state machine). Orchestrator-owned spine:
 //! every alert decision downstream trusts the transitions emitted here.
 
-use nudge_proto::{HookEnvelope, ProcInfo};
+use nudge_proto::{Agent, HookEnvelope, ProcInfo};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -18,6 +18,8 @@ pub enum SessionState {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    /// D26: which agent runs this session; fixed at creation.
+    pub agent: Agent,
     pub project: String,
     pub cwd: String,
     pub state: SessionState,
@@ -27,8 +29,9 @@ pub struct Session {
     pub alert_pending: bool,
     /// D22: share of the context window in use, 0..100, from this session's statusline.
     pub context_percent: Option<f64>,
+    /// D27: the Claude Code / Codex process, for the dead-session sweep.
     #[serde(skip)]
-    pub claude_pid: Option<u32>,
+    pub agent_pid: Option<u32>,
     #[serde(skip)]
     pub ancestors: Vec<ProcInfo>,
     #[serde(skip)]
@@ -78,15 +81,17 @@ fn project_of(cwd: &str) -> String {
         .to_string()
 }
 
-/// First ancestor that looks like the Claude Code process. Native installs run
-/// `claude(.exe)`; npm installs run under `node(.exe)`.
-fn find_claude_pid(ancestors: &[ProcInfo]) -> Option<u32> {
+/// First ancestor that looks like the agent's process (D27). Claude Code native
+/// installs run `claude(.exe)`, npm installs run under `node(.exe)`. Codex always
+/// runs `codex(.exe)` (under a `node` wrapper for npm installs, which we skip).
+fn find_agent_pid(agent: Agent, ancestors: &[ProcInfo]) -> Option<u32> {
     let lower = |p: &ProcInfo| p.name.to_ascii_lowercase();
-    ancestors
-        .iter()
-        .find(|p| lower(p).starts_with("claude"))
-        .or_else(|| ancestors.iter().find(|p| lower(p).starts_with("node")))
-        .map(|p| p.pid)
+    let named = |prefix: &str| ancestors.iter().find(|p| lower(p).starts_with(prefix));
+    match agent {
+        Agent::Claude => named("claude").or_else(|| named("node")),
+        Agent::Codex => named("codex"),
+    }
+    .map(|p| p.pid)
 }
 
 impl SessionStore {
@@ -120,6 +125,10 @@ impl SessionStore {
             "UserPromptSubmit" => Some(SessionState::Running),
             "PreToolUse" | "PostToolUse" => Some(SessionState::Running),
             "Stop" => Some(SessionState::Done),
+            // D27: Codex asks for approval with its own event.
+            "PermissionRequest" => Some(SessionState::Blocked),
+            // D27: Codex turn interrupted by the user, who is at the keyboard: no alert.
+            "Interrupt" => Some(SessionState::Idle),
             "Notification" => {
                 let ty = p.get("notification_type").and_then(|v| v.as_str()).unwrap_or("");
                 if BLOCKING_NOTIFICATIONS.contains(&ty) {
@@ -205,12 +214,12 @@ impl SessionStore {
         Some(Transition::Acked { id: id.to_string() })
     }
 
-    /// Remove sessions whose Claude process is gone (AC #3: within 10s).
+    /// Remove sessions whose agent process is gone (AC #3: within 10s).
     pub fn sweep(&mut self, is_alive: impl Fn(u32) -> bool) -> Vec<Transition> {
         let dead: Vec<String> = self
             .sessions
             .values()
-            .filter(|s| s.claude_pid.is_some_and(|pid| !is_alive(pid)))
+            .filter(|s| s.agent_pid.is_some_and(|pid| !is_alive(pid)))
             .map(|s| s.id.clone())
             .collect();
         dead.into_iter()
@@ -225,13 +234,14 @@ impl SessionStore {
 fn new_session(id: &str, cwd: &str, env: &HookEnvelope) -> Session {
     Session {
         id: id.to_string(),
+        agent: env.agent,
         project: project_of(cwd),
         cwd: cwd.to_string(),
         state: SessionState::Idle,
         since_ms: env.ts_ms,
         alert_pending: false,
         context_percent: None,
-        claude_pid: find_claude_pid(&env.ancestors),
+        agent_pid: find_agent_pid(env.agent, &env.ancestors),
         ancestors: env.ancestors.clone(),
         last_event_ms: env.ts_ms,
     }
@@ -244,8 +254,8 @@ fn refresh_identity(s: &mut Session, cwd: &str, env: &HookEnvelope) {
     }
     if !env.ancestors.is_empty() {
         s.ancestors = env.ancestors.clone();
-        if let Some(pid) = find_claude_pid(&env.ancestors) {
-            s.claude_pid = Some(pid);
+        if let Some(pid) = find_agent_pid(s.agent, &env.ancestors) {
+            s.agent_pid = Some(pid);
         }
     }
 }
@@ -269,6 +279,7 @@ mod tests {
         HookEnvelope {
             v: 1,
             ts_ms: ts,
+            agent: Agent::Claude,
             ancestors: vec![
                 ProcInfo { pid: 10, name: "bash.exe".into() },
                 ProcInfo { pid: 20, name: "claude.exe".into() },
@@ -444,9 +455,72 @@ mod tests {
     #[test]
     fn claude_pid_prefers_claude_then_node() {
         let a = |n: &str, p| ProcInfo { pid: p, name: n.into() };
-        assert_eq!(find_claude_pid(&[a("sh", 1), a("node.exe", 2), a("Claude.exe", 3)]), Some(3));
-        assert_eq!(find_claude_pid(&[a("sh", 1), a("node", 2)]), Some(2));
-        assert_eq!(find_claude_pid(&[a("sh", 1)]), None);
+        assert_eq!(find_agent_pid(Agent::Claude, &[a("sh", 1), a("node.exe", 2), a("Claude.exe", 3)]), Some(3));
+        assert_eq!(find_agent_pid(Agent::Claude, &[a("sh", 1), a("node", 2)]), Some(2));
+        assert_eq!(find_agent_pid(Agent::Claude, &[a("sh", 1)]), None);
+    }
+
+    #[test]
+    fn codex_pid_is_the_codex_process_never_its_node_wrapper() {
+        let a = |n: &str, p| ProcInfo { pid: p, name: n.into() };
+        // Spike chain (D27): hook, powershell, codex.exe, node.exe (npm), terminal.
+        let chain = [a("powershell.exe", 1), a("codex.exe", 2), a("node.exe", 3), a("WindowsTerminal.exe", 4)];
+        assert_eq!(find_agent_pid(Agent::Codex, &chain), Some(2));
+        assert_eq!(find_agent_pid(Agent::Codex, &[a("powershell.exe", 1), a("node.exe", 3)]), None);
+    }
+
+    fn codex_ev(id: &str, event: &str, ts: u64) -> HookEnvelope {
+        let mut e = ev(id, event, ts);
+        e.agent = Agent::Codex;
+        e.ancestors = vec![ProcInfo { pid: 7, name: "powershell.exe".into() }, ProcInfo { pid: 8, name: "codex.exe".into() }];
+        e
+    }
+
+    #[test]
+    fn codex_permission_request_blocks_then_post_tool_use_resumes() {
+        // The spike's real order: PreToolUse, PermissionRequest, (approve) PostToolUse, Stop.
+        let mut st = SessionStore::default();
+        st.apply_hook(&codex_ev("c", "SessionStart", 1));
+        st.apply_hook(&codex_ev("c", "UserPromptSubmit", 2));
+        st.apply_hook(&codex_ev("c", "PreToolUse", 3));
+        let t = st.apply_hook(&codex_ev("c", "PermissionRequest", 4));
+        assert!(t[0].is_alert());
+        assert_eq!(state(&st, "c"), SessionState::Blocked);
+        st.apply_hook(&codex_ev("c", "PostToolUse", 5));
+        assert_eq!(state(&st, "c"), SessionState::Running);
+        assert!(st.apply_hook(&codex_ev("c", "Stop", 6))[0].is_alert());
+        let s = st.get("c").unwrap();
+        assert_eq!((s.agent, s.agent_pid), (Agent::Codex, Some(8)));
+    }
+
+    #[test]
+    fn duplicate_codex_events_alert_once() {
+        // D27: the same hook in two config layers delivers every event twice.
+        let mut st = SessionStore::default();
+        st.apply_hook(&codex_ev("c", "UserPromptSubmit", 1));
+        assert_eq!(st.apply_hook(&codex_ev("c", "PermissionRequest", 2)).len(), 1);
+        assert!(st.apply_hook(&codex_ev("c", "PermissionRequest", 2)).is_empty());
+        st.apply_hook(&codex_ev("c", "PostToolUse", 3));
+        assert_eq!(st.apply_hook(&codex_ev("c", "Stop", 4)).len(), 1);
+        assert!(st.apply_hook(&codex_ev("c", "Stop", 4)).is_empty());
+    }
+
+    #[test]
+    fn interrupt_goes_idle_without_alert() {
+        let mut st = SessionStore::default();
+        st.apply_hook(&codex_ev("c", "UserPromptSubmit", 1));
+        let t = st.apply_hook(&codex_ev("c", "Interrupt", 2));
+        assert_eq!(state(&st, "c"), SessionState::Idle);
+        assert!(!t[0].is_alert());
+        assert!(!st.get("c").unwrap().alert_pending);
+    }
+
+    #[test]
+    fn agent_is_fixed_at_creation() {
+        let mut st = SessionStore::default();
+        st.apply_hook(&codex_ev("c", "SessionStart", 1));
+        st.apply_hook(&ev("c", "UserPromptSubmit", 2)); // a stray Claude-tagged event
+        assert_eq!(st.get("c").unwrap().agent, Agent::Codex);
     }
 
     #[test]
@@ -465,6 +539,7 @@ mod tests {
         assert_eq!(s["state"], "done");
         assert_eq!(s["sinceMs"], 7);
         assert_eq!(s["alertPending"], true);
-        assert!(s.get("claudePid").is_none() && s.get("ancestors").is_none());
+        assert_eq!(s["agent"], "claude");
+        assert!(s.get("agentPid").is_none() && s.get("ancestors").is_none());
     }
 }

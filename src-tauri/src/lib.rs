@@ -48,7 +48,7 @@ fn spawn_sweeper(core: Arc<Core>) {
             use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
             loop {
                 std::thread::sleep(SWEEP_EVERY);
-                let pids: Vec<Pid> = core.claude_pids().into_iter().map(Pid::from_u32).collect();
+                let pids: Vec<Pid> = core.agent_pids().into_iter().map(Pid::from_u32).collect();
                 if pids.is_empty() {
                     continue;
                 }

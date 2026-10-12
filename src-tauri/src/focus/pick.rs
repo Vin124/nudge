@@ -2,9 +2,9 @@
 
 use nudge_proto::ProcInfo;
 
-/// Shells, the Claude process itself, and console plumbing: never the window owner.
+/// Shells, the agent process itself (Claude Code, Codex), and console plumbing: never the window owner.
 const SKIP: &[&str] = &[
-    "claude", "node", "bash", "sh", "zsh", "fish", "cmd", "powershell", "pwsh", "conhost", "openconsole", "wsl",
+    "claude", "codex", "node", "bash", "sh", "zsh", "fish", "cmd", "powershell", "pwsh", "conhost", "openconsole", "wsl",
     "wslhost", "login", "tmux", "screen", "sudo",
     // Beyond the brief: OS session parents. They own unrelated windows (File
     // Explorer, the desktop), so focusing them would be wrong; fall back instead.

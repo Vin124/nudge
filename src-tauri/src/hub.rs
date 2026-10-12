@@ -5,8 +5,8 @@
 use crate::config::Config;
 use crate::server::Inbound;
 use crate::session::{Session, SessionStore, Transition};
-use crate::usage::{UsageSnapshot, UsageStore, UsageWindow};
-use nudge_proto::ProcInfo;
+use crate::usage::{CodexUsage, UsageSnapshot, UsageStore, UsageWindow};
+use nudge_proto::{Agent, ProcInfo};
 use serde::Serialize;
 use std::io;
 use std::path::PathBuf;
@@ -17,6 +17,8 @@ use std::sync::{Arc, Mutex};
 pub struct Snapshot {
     pub sessions: Vec<Session>,
     pub usage: UsageSnapshot,
+    /// D29: null until a Codex session reports usage.
+    pub codex_usage: Option<CodexUsage>,
     pub config: Config,
 }
 
@@ -53,7 +55,12 @@ impl Core {
     }
 
     fn snap_of(st: &State) -> Snapshot {
-        Snapshot { sessions: st.sessions.snapshot(), usage: st.usage.snapshot().clone(), config: st.config.clone() }
+        Snapshot {
+            sessions: st.sessions.snapshot(),
+            usage: st.usage.snapshot().clone(),
+            codex_usage: st.usage.codex().cloned(),
+            config: st.config.clone(),
+        }
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -85,7 +92,10 @@ impl Core {
             match msg {
                 Inbound::Hook(h) => (st.sessions.apply_hook(&h), false),
                 Inbound::Status(s) => {
-                    let usage = st.usage.apply_status(&s);
+                    let usage = match s.agent {
+                        Agent::Claude => st.usage.apply_status(&s),
+                        Agent::Codex => st.usage.apply_codex(&s),
+                    };
                     let ctx = s.session_id.as_deref().is_some_and(|id| st.sessions.apply_context(id, s.context_used_percentage));
                     (vec![], usage || ctx)
                 }
@@ -104,8 +114,8 @@ impl Core {
         self.publish(ts, false);
     }
 
-    pub fn claude_pids(&self) -> Vec<u32> {
-        self.lock().sessions.snapshot().iter().filter_map(|s| s.claude_pid).collect()
+    pub fn agent_pids(&self) -> Vec<u32> {
+        self.lock().sessions.snapshot().iter().filter_map(|s| s.agent_pid).collect()
     }
 
     /// What focus needs: the hook's process ancestors and the session's cwd.
@@ -158,6 +168,7 @@ mod tests {
         Inbound::Hook(HookEnvelope {
             v: 1,
             ts_ms: ts,
+            agent: Agent::Claude,
             ancestors: vec![ProcInfo { pid: 42, name: "claude".into() }],
             payload: json!({"session_id": id, "hook_event_name": ev, "cwd": "/p/x"}),
         })
@@ -187,10 +198,35 @@ mod tests {
         c.handle(hook("a", "Stop", 1));
         c.ack("a");
         assert!(matches!(rec.ts.lock().unwrap().last(), Some(Transition::Acked { .. })));
-        assert_eq!(c.claude_pids(), vec![42]);
+        assert_eq!(c.agent_pids(), vec![42]);
         c.sweep(|_| false);
         assert!(matches!(rec.ts.lock().unwrap().last(), Some(Transition::Removed { .. })));
         assert!(c.snapshot().sessions.is_empty());
+    }
+
+    #[test]
+    fn codex_status_routes_to_codex_usage_and_session_context() {
+        let (c, rec) = core();
+        let h = HookEnvelope { v: 1, ts_ms: 1, agent: Agent::Codex, ancestors: vec![], payload: json!({"session_id": "x", "hook_event_name": "Stop", "cwd": "/p/x"}) };
+        c.handle(Inbound::Hook(h));
+        let status = nudge_proto::StatusEnvelope {
+            v: 1,
+            ts_ms: 2,
+            agent: Agent::Codex,
+            session_id: Some("x".into()),
+            rate_limits_available: None,
+            rate_limits: None,
+            context_used_percentage: Some(4.7),
+            limit_windows: Some(vec![nudge_proto::LimitWindow { used_percentage: 3.0, window_minutes: 43200, resets_at: None }]),
+        };
+        c.handle(Inbound::Status(status));
+        let snap = rec.snaps.lock().unwrap().last().unwrap().clone();
+        assert_eq!(snap.codex_usage.as_ref().unwrap().windows[0].window_minutes, 43200);
+        assert_eq!(snap.usage.available, None, "Claude usage untouched");
+        assert_eq!(snap.sessions[0].context_percent, Some(4.7));
+        let v = serde_json::to_value(&snap).unwrap();
+        assert_eq!(v["codexUsage"]["windows"][0]["windowMinutes"], 43200);
+        assert_eq!(v["sessions"][0]["agent"], "codex");
     }
 
     #[test]

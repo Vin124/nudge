@@ -6,8 +6,13 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type SessionState = "idle" | "running" | "blocked" | "done";
 
+/** D26: which coding agent runs a session. */
+export type Agent = "claude" | "codex";
+
 export interface Session {
   id: string;
+  /** D26: fixed when the session is first seen */
+  agent: Agent;
   project: string;
   cwd: string;
   state: SessionState;
@@ -64,9 +69,26 @@ export interface Config {
   dnd: boolean;
 }
 
+/** D29: a limit window with its length; label it with the window length, never assume 5h/weekly. */
+export interface LabeledWindow {
+  usedPercentage: number;
+  windowMinutes: number;
+  /** unix seconds */
+  resetsAt: number | null;
+}
+
+/** D29: Codex usage, separate from Claude's. */
+export interface CodexUsage {
+  windows: LabeledWindow[];
+  updatedMs: number;
+}
+
 export interface Snapshot {
   sessions: Session[];
+  /** Claude Code usage (statusline / opt-in poll). */
   usage: UsageSnapshot;
+  /** D29: null until a Codex session reports usage */
+  codexUsage: CodexUsage | null;
   config: Config;
 }
 

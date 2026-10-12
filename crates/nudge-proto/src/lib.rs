@@ -22,11 +22,23 @@ pub struct ProcInfo {
     pub name: String,
 }
 
-/// Sent by `nudge-hook` for every Claude Code hook invocation.
+/// D26: which coding agent a sidecar runs for. Defaulted to Claude on the
+/// wire so envelopes from older sidecars still parse.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Agent {
+    #[default]
+    Claude,
+    Codex,
+}
+
+/// Sent by `nudge-hook` for every Claude Code / Codex hook invocation.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HookEnvelope {
     pub v: u32,
     pub ts_ms: u64,
+    #[serde(default)]
+    pub agent: Agent,
     /// Process ancestors of the hook process, nearest parent first.
     pub ancestors: Vec<ProcInfo>,
     /// The raw JSON Claude Code wrote to the hook's stdin. Contains at least
@@ -48,11 +60,23 @@ pub struct RateLimits {
     pub seven_day: Option<RateWindow>,
 }
 
-/// Sent by `nudge-status` on every statusline render.
+/// D28/D29: one usage limit window with its length, as Codex reports it.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct LimitWindow {
+    pub used_percentage: f64,
+    pub window_minutes: u32,
+    /// Unix seconds.
+    pub resets_at: Option<i64>,
+}
+
+/// Sent by `nudge-status` on every statusline render (Claude), and by
+/// `nudge-hook --agent codex` after reading the transcript (D28).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct StatusEnvelope {
     pub v: u32,
     pub ts_ms: u64,
+    #[serde(default)]
+    pub agent: Agent,
     pub session_id: Option<String>,
     pub rate_limits_available: Option<bool>,
     pub rate_limits: Option<RateLimits>,
@@ -60,6 +84,9 @@ pub struct StatusEnvelope {
     /// Defaulted so an older sidecar's envelope still parses.
     #[serde(default)]
     pub context_used_percentage: Option<f64>,
+    /// D28: Codex limit windows; None = no limit info in this update.
+    #[serde(default)]
+    pub limit_windows: Option<Vec<LimitWindow>>,
 }
 
 impl StatusEnvelope {
@@ -72,6 +99,7 @@ impl StatusEnvelope {
         StatusEnvelope {
             v: PROTOCOL_VERSION,
             ts_ms: now_ms(),
+            agent: Agent::Claude,
             session_id: raw.get("session_id").and_then(|v| v.as_str()).map(str::to_owned),
             rate_limits_available: raw.get("rate_limits_available").and_then(|v| v.as_bool()),
             rate_limits,
@@ -80,6 +108,7 @@ impl StatusEnvelope {
                 .and_then(|c| c.get("used_percentage"))
                 .and_then(|v| v.as_f64())
                 .filter(|p| p.is_finite()),
+            limit_windows: None,
         }
     }
 }
@@ -250,5 +279,17 @@ mod tests {
         let old = json!({"v": 1, "ts_ms": 1, "session_id": "x", "rate_limits_available": null, "rate_limits": null});
         let s: StatusEnvelope = serde_json::from_value(old).unwrap();
         assert_eq!(s.context_used_percentage, None);
+        assert_eq!(s.agent, Agent::Claude, "D26: no agent field means Claude");
+        assert_eq!(s.limit_windows, None);
+    }
+
+    #[test]
+    fn old_hook_envelope_defaults_to_claude_and_agent_is_lowercase() {
+        let old = json!({"v": 1, "ts_ms": 1, "ancestors": [], "payload": {}});
+        let h: HookEnvelope = serde_json::from_value(old).unwrap();
+        assert_eq!(h.agent, Agent::Claude);
+        assert_eq!(serde_json::to_value(Agent::Codex).unwrap(), json!("codex"));
+        let codex = json!({"v": 1, "ts_ms": 1, "agent": "codex", "ancestors": [], "payload": {}});
+        assert_eq!(serde_json::from_value::<HookEnvelope>(codex).unwrap().agent, Agent::Codex);
     }
 }
