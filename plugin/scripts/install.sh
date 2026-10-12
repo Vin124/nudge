@@ -4,13 +4,18 @@
 # verifies its SHA-256 against the release's SHA256SUMS, extracts it into
 # ~/.nudge/bin, runs `nudge-status setup` (D14) and launches the app.
 #
+# $1 is optional: the agent this install is for (D31). `codex` skips
+# `nudge-status setup`, so a Codex install never edits Claude's settings.
+# NUDGE_BASE_URL overrides the download base (tests).
+#
 # Logs to ~/.nudge/install.log. On any failure: log and exit 0.
 
 NUDGE_HOME="${NUDGE_HOME:-$HOME/.nudge}"
 BIN="$NUDGE_HOME/bin"
 LOG="$NUDGE_HOME/install.log"
 LOCK="$NUDGE_HOME/install.lock"
-BASE_URL="https://github.com/${NUDGE_REPO:-Vin124/nudge}/releases/latest/download"
+AGENT="${1:-claude}"
+BASE_URL="${NUDGE_BASE_URL:-https://github.com/${NUDGE_REPO:-Vin124/nudge}/releases/latest/download}"
 TMP=""
 
 mkdir -p "$NUDGE_HOME" 2>/dev/null || exit 0
@@ -141,7 +146,11 @@ done
 log "extracted to $BIN"
 
 # ---- statusline (D14) -------------------------------------------------------
-"$STATUS" setup >>"$LOG" 2>&1 || log "WARN: nudge-status setup failed (run /nudge:setup)"
+if [ "$AGENT" = codex ]; then
+    log "agent codex: skipping nudge-status setup (Claude statusline untouched, D31)"
+else
+    "$STATUS" setup >>"$LOG" 2>&1 || log "WARN: nudge-status setup failed (run /nudge:setup)"
+fi
 
 # ---- launch (detached; the app is single-instance) --------------------------
 detach() {

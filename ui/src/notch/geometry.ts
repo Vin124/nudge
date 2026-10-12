@@ -35,6 +35,8 @@ export const MAX_LEN = PAD + RING + SEP + (MAX_AVATARS + 1) * RING + MAX_AVATARS
 export const PANEL_W = 380;
 export const PANEL_PAD = 10;
 export const HEADER_H = 84;
+/** D30: extra header height when Claude's and Codex's usage groups are both shown (two compact 60px rows). */
+export const USAGE_EXTRA_H = 36;
 export const ROW_H = 52;
 export const MAX_ROWS = 5;
 /** D24: the Settings page uses (nearly) the whole envelope; it scrolls inside. */
@@ -52,9 +54,9 @@ export function collapsedLength(n: number): number {
   return Math.max(MIN_LEN, PAD + RING + avatars + PAD);
 }
 
-/** Expanded panel height for `n` sessions (empty state uses one row). */
-export function panelHeight(n: number): number {
-  return PANEL_PAD + HEADER_H + clamp(n, 1, MAX_ROWS) * ROW_H + PANEL_PAD;
+/** Expanded panel height for `n` sessions (empty state uses one row); `headerExtra` is USAGE_EXTRA_H with two usage groups. */
+export function panelHeight(n: number, headerExtra = 0): number {
+  return PANEL_PAD + HEADER_H + headerExtra + clamp(n, 1, MAX_ROWS) * ROW_H + PANEL_PAD;
 }
 
 function contains(m: Monitor, p: Point): boolean {
@@ -126,10 +128,10 @@ export function placeWindow(edge: Edge, offset: number, m: Monitor): Placement {
 export type Page = "home" | "settings";
 
 /** The visible shape inside the envelope, logical px. */
-export function shapeRect(edge: Edge, along: number, expanded: boolean, sessions: number, page: Page = "home"): Rect {
+export function shapeRect(edge: Edge, along: number, expanded: boolean, sessions: number, page: Page = "home", headerExtra = 0): Rect {
   const vertical = isVertical(edge);
   const [w, h] = expanded
-    ? [PANEL_W, page === "settings" ? SETTINGS_H : panelHeight(sessions)]
+    ? [PANEL_W, page === "settings" ? SETTINGS_H : panelHeight(sessions, headerExtra)]
     : vertical ? [THICK, collapsedLength(sessions)] : [collapsedLength(sessions), THICK];
   const alongSize = vertical ? h : w;
   const a = clamp(along - alongSize / 2, 0, ENVELOPE - alongSize);

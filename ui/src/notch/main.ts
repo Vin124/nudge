@@ -82,7 +82,7 @@ async function watchMonitors(): Promise<void> {
 
 /** Push the current shape rect to the DOM (animated by `motion`) and to the hit test. */
 function applyShape(motion: Motion): void {
-  const r = shapeRect(edge, along, expanded, view.sessionCount(), page);
+  const r = shapeRect(edge, along, expanded, view.sessionCount(), page, view.usageExtra());
   view.setMotion(motion);
   view.setEdge(edge);
   view.setRect(r);
@@ -277,6 +277,7 @@ async function persist(): Promise<void> {
 // ---- snapshots ----
 function onSnap(s: Snapshot): void {
   const before = view.sessionCount();
+  const extraBefore = view.usageExtra();
   snapshot = s;
   view.render(s);
   settings?.show(s.config);
@@ -291,7 +292,7 @@ function onSnap(s: Snapshot): void {
       placed = true;
       requestAnimationFrame(() => view.shape.classList.remove("intro"));
     }
-  } else if (view.sessionCount() !== before && !dragging) {
+  } else if ((view.sessionCount() !== before || view.usageExtra() !== extraBefore) && !dragging) {
     applyShape(expanded ? "open" : "close");
   }
 }

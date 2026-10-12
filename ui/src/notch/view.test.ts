@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Config, Session, Snapshot, UsageSnapshot } from "../shared/contracts";
+import type { CodexUsage, Config, Session, Snapshot, UsageSnapshot } from "../shared/contracts";
 import { createView, EMPTY_TEXT, FOCUS_FAIL_TEXT, NA_TOOLTIP, pickTint, TINTS, type NotchView } from "./view";
 
 const config = (showWeekly = true): Config => ({
@@ -23,8 +23,8 @@ const sess = (id: string, over: Partial<Session> = {}): Session => ({
   id, agent: "claude", project: `proj-${id}`, cwd: `/x/${id}`, state: "idle", sinceMs: 0, alertPending: false, contextPercent: null, ...over,
 });
 
-const snap = (sessions: Session[], u = usage(), showWeekly = true): Snapshot => ({
-  sessions, usage: u, codexUsage: null, config: config(showWeekly),
+const snap = (sessions: Session[], u = usage(), showWeekly = true, codexUsage: CodexUsage | null = null): Snapshot => ({
+  sessions, usage: u, codexUsage, config: config(showWeekly),
 });
 
 const NOW = 1_000_000 * 1000;
@@ -254,5 +254,73 @@ describe("row click", () => {
     expect(row.querySelector(".row-msg")!.textContent).toBe(FOCUS_FAIL_TEXT);
     await vi.advanceTimersByTimeAsync(2000);
     expect(row.classList.contains("has-msg")).toBe(false);
+  });
+});
+
+describe("Codex (D29, D30)", () => {
+  const silent = () => usage({ available: null, fiveHour: null, sevenDay: null });
+  const cx = (...w: [number, number][]): CodexUsage => ({
+    windows: w.map(([windowMinutes, usedPercentage]) => ({ windowMinutes, usedPercentage, resetsAt: null })),
+    updatedMs: 0,
+  });
+  const items = () => [...root.querySelectorAll(".usage-codex .usage-item")];
+  const titles = () => items().map((i) => i.querySelector(".usage-name")!.textContent);
+  const gauge = () => root.querySelector('.bar [data-wheel="usage"]') as HTMLElement;
+
+  it("Claude-only snapshot has no tag, no group labels and a hidden Codex group", () => {
+    view.render(snap([sess("a")]), NOW);
+    expect(root.querySelector(".row-tag")).toBeNull();
+    expect(root.querySelector(".row")!.getAttribute("data-agent")).toBe("claude");
+    expect((root.querySelector(".usage-codex") as HTMLElement).hidden).toBe(true);
+    expect(items()).toHaveLength(0);
+    const label = root.querySelector(".usage:not(.usage-codex) .usage-label") as HTMLElement;
+    expect(label.hidden).toBe(true);
+    expect(view.usageExtra()).toBe(0);
+  });
+  it("tags Codex rows and dots, not Claude rows", () => {
+    view.render(snap([sess("a", { agent: "codex" }), sess("b")]), NOW);
+    const row = (id: string) => root.querySelector(`.row[data-id="${id}"]`) as HTMLElement;
+    expect(row("a").dataset.agent).toBe("codex");
+    expect(row("a").querySelector(".row-tag")!.textContent).toBe("Codex");
+    expect(row("a").querySelector(".row-name")!.textContent).toBe("proj-aCodex");
+    expect((root.querySelector('.dots .avatar[data-id="a"]') as HTMLElement).dataset.agent).toBe("codex");
+    expect(row("b").dataset.agent).toBe("claude");
+    expect(row("b").querySelector(".row-tag")).toBeNull();
+    expect(row("b").querySelector(".row-name")!.textContent).toBe("proj-b");
+  });
+  it("relabels Codex items when the window lengths change, then removes the group", () => {
+    view.render(snap([], usage(), true, cx([300, 20], [10080, 55])), NOW);
+    expect(titles()).toEqual(["5-hour", "Weekly"]);
+    expect(items().map((i) => i.querySelector(".usage-pct")!.textContent)).toEqual(["20%", "55%"]);
+    view.render(snap([], usage(), true, cx([43200, 7])), NOW);
+    expect(titles()).toEqual(["30-day"]);
+    expect(items()[0].querySelector(".usage-pct")!.textContent).toBe("7%");
+    view.render(snap([], usage(), true, null), NOW);
+    expect(items()).toHaveLength(0);
+    expect((root.querySelector(".usage-codex") as HTMLElement).hidden).toBe(true);
+    expect(view.usageExtra()).toBe(0);
+  });
+  it("labels both groups and grows the header when Claude is heard", () => {
+    view.render(snap([], usage(), true, cx([300, 20])), NOW);
+    const claudeLabel = root.querySelector(".usage:not(.usage-codex) .usage-label") as HTMLElement;
+    expect(claudeLabel.hidden).toBe(false);
+    expect(claudeLabel.textContent).toBe("Claude");
+    expect(root.querySelector(".usage-codex .usage-label")!.textContent).toBe("Codex");
+    expect(view.usageExtra()).toBeGreaterThan(0);
+    // gauge stays Claude's
+    expect(gauge().getAttribute("title")).toBe("5-hour limit 42% used");
+  });
+  it("hides Claude's group and gauges Codex when Claude was never heard", () => {
+    view.render(snap([], silent(), true, cx([300, 20], [10080, 55])), NOW);
+    expect((root.querySelector(".usage:not(.usage-codex)") as HTMLElement).hidden).toBe(true);
+    expect((root.querySelector(".usage-codex") as HTMLElement).hidden).toBe(false);
+    expect(view.usageExtra()).toBe(0);
+    expect(gauge().getAttribute("title")).toBe("Codex 5-hour limit 20% used");
+    expect(gauge().classList.contains("ok")).toBe(true);
+    const off = (n: string) => Number(gauge().querySelector(`.arc.${n}`)!.getAttribute("stroke-dashoffset"));
+    expect(off("five")).toBeCloseTo(2 * Math.PI * 14 * 0.8, 3);
+    expect(off("seven")).toBeCloseTo(2 * Math.PI * 9.5 * 0.45, 3);
+    view.render(snap([], silent(), false, cx([300, 20], [10080, 55])), NOW);
+    expect(gauge().querySelector(".arc.seven")!.hasAttribute("stroke")).toBe(false);
   });
 });

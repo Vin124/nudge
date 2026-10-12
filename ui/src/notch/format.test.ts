@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatElapsed, formatPercent, usageColor } from "./format";
+import { formatCountdown, formatElapsed, formatPercent, usageColor, windowLabel } from "./format";
 
 describe("formatElapsed", () => {
   it("formats across ranges", () => {
@@ -42,5 +42,17 @@ describe("formatPercent / usageColor", () => {
     expect(new Set([g, a, r]).size).toBe(3);
     expect(usageColor(84.9)).toBe(a);
     expect(usageColor(100)).toBe(r);
+  });
+});
+
+describe("windowLabel (D29)", () => {
+  it("labels windows from their length", () => {
+    expect(windowLabel(300)).toBe("5-hour");
+    expect(windowLabel(10080)).toBe("Weekly");
+    expect(windowLabel(43200)).toBe("30-day");
+    expect(windowLabel(1440)).toBe("1-day");
+    expect(windowLabel(60)).toBe("1-hour");
+    expect(windowLabel(90)).toBe("90-min");
+    expect(windowLabel(20160)).toBe("14-day");
   });
 });

@@ -1,12 +1,16 @@
 #!/bin/sh
 # Nudge hook shim (D4, D15). Claude Code runs this for every registered hook
 # event with the hook JSON on stdin; $1 is the event name (see hooks.json).
+# $2 is optional: the agent (D31). Codex's codex-hooks.json passes `codex`,
+# which reaches nudge-hook as `--agent codex` and install.sh as its $1;
+# Claude's hooks.json passes nothing, so that call is unchanged.
 #
 # Contract: never write to stdout (SessionStart/UserPromptSubmit stdout is
 # injected into Claude's context) and always exit 0 (AC #10).
 
 NUDGE_HOME="${NUDGE_HOME:-$HOME/.nudge}"
 BIN="$NUDGE_HOME/bin"
+AGENT="${2:-}"
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd) || HERE=.
 
 # Nothing started from here may reach Claude's context.
@@ -49,11 +53,14 @@ if [ "${1:-}" = "SessionStart" ]; then
     launch_app
     if [ -z "$hook" ]; then
         # First run: install in the background; this event is dropped.
-        detach sh "$HERE/install.sh"
+        detach sh "$HERE/install.sh" "$AGENT"
     fi
 fi
 
 if [ -n "$hook" ]; then
+    if [ -n "$AGENT" ]; then
+        exec "$hook" --agent "$AGENT"
+    fi
     exec "$hook"
 fi
 cat >/dev/null

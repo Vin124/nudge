@@ -1,0 +1,68 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" SessionStart codex", "commandWindows": "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"$env:PLUGIN_ROOT\\scripts\\hook.ps1\" SessionStart codex; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" UserPromptSubmit codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" PreToolUse codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" PostToolUse codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" PermissionRequest codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" Stop codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 5 }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" Interrupt codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 3 }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "sh \"${PLUGIN_ROOT}/scripts/hook.sh\" SessionEnd codex", "commandWindows": "$n = $env:NUDGE_HOME; if (-not $n) { $n = Join-Path $HOME '.nudge' }; $h = Join-Path $n 'bin\\nudge-hook.exe'; if (Test-Path -LiteralPath $h -PathType Leaf) { & $h --agent codex *> $null }; exit 0", "timeout": 3 }
+        ]
+      }
+    ]
+  }
+}

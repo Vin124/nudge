@@ -1,7 +1,7 @@
 # Nudge — a notch for Claude Code
 
 A small black notch on the edge of your screen that watches every Claude Code
-session on your machine. It shows your 5-hour and weekly usage, each session's
+and Codex session on your machine. It shows your 5-hour and weekly usage, each session's
 context window, and pulls you back (edge glow, a sound or voice, a little pixel
 fox) the moment a session finishes or needs your permission. So you can stop
 doom-scrolling while you wait.
@@ -25,6 +25,8 @@ Windows and macOS. MIT licensed. Not affiliated with Anthropic.
 
 ## Install
 
+### Claude Code
+
 Ask Claude Code to do it, or run these two commands inside Claude Code yourself:
 
 ```
@@ -37,6 +39,25 @@ from this repo's GitHub Releases and verifies its SHA-256. It installs to
 `~/.nudge/bin`, points your statusline at Nudge (your existing statusline keeps
 working, wrapped unchanged), and launches the app.
 
+### Codex
+
+In a terminal:
+
+```
+codex plugin marketplace add Vin124/nudge
+```
+
+Then, inside Codex:
+
+1. Run `/plugins` and install **Nudge**.
+2. Open `/hooks` and trust Nudge's hooks. Codex skips hooks nobody has
+   trusted, and asks again whenever a Nudge release changes them.
+3. Start a new session.
+
+The first session downloads and verifies the app the same way, into the same
+`~/.nudge/bin`. A Codex install leaves Claude Code's settings alone; if you
+use both, install the plugin in each.
+
 ## What it touches
 
 | Path | Why |
@@ -44,6 +65,8 @@ working, wrapped unchanged), and launches the app.
 | `~/.nudge/` | the app, config, a statusline backup, and `runtime.json` (local port + per-launch token) |
 | `~/.claude/settings.json` → `statusLine` | wrapped to feed usage numbers; backed up first |
 | Claude Code hooks (from the plugin) | report session state to the app on `127.0.0.1` only |
+| Codex hooks (from the plugin) | report session state to the app on `127.0.0.1` only |
+| `~/.codex/sessions/*.jsonl` | read-only, the last 256 KiB of the session's transcript; only the usage numbers (limit windows, context size) are sent to the app, never prompt or tool text |
 
 Nudge never reads your Claude login token, **unless** you turn on
 *Settings → Usage → Live usage when no session is running*. With it on, the
@@ -56,7 +79,8 @@ token is read on your machine and sent only to `api.anthropic.com`.
 /plugin uninstall nudge
 ```
 
-This restores your original statusline. Then delete `~/.nudge`.
+This restores your original statusline. In Codex, run `/plugins` and
+uninstall Nudge. Then delete `~/.nudge`.
 
 ## Develop
 

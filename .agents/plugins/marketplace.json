@@ -1,0 +1,12 @@
+{
+  "name": "nudge",
+  "interface": { "displayName": "Nudge" },
+  "plugins": [
+    {
+      "name": "nudge",
+      "source": { "source": "local", "path": "./plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

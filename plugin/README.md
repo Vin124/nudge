@@ -3,6 +3,23 @@
 A notch for Claude Code: live session status, usage and context rings, and alerts.
 Not an official Anthropic product.
 
+## One folder, two plugins
+
+This folder is both the Claude Code plugin and the Codex plugin (D25):
+
+| | Claude Code | Codex |
+|---|---|---|
+| Manifest | `.claude-plugin/plugin.json` | `plugin.json` (portable manifest) |
+| Hooks | `hooks/hooks.json` → `scripts/hook.sh` | `hooks/codex-hooks.json`, named by `extensions.com.openai.hooks` |
+| Windows | Git Bash runs `hook.sh` | PowerShell: `scripts/hook.ps1` on SessionStart, `nudge-hook.exe --agent codex` inline otherwise |
+| Installer | `scripts/install.sh` | `scripts/install.ps1` (Windows), `install.sh codex` (macOS); neither touches Claude's statusline |
+| Marketplace | `/.claude-plugin/marketplace.json` | `/.agents/plugins/marketplace.json` |
+
+Naming the Codex hooks file explicitly keeps Codex from loading Claude's
+`hooks/hooks.json`. Changing `codex-hooks.json` makes Codex ask users to trust
+the hooks again (D32), so keep it stable. Installers honour `NUDGE_BASE_URL` to
+download from somewhere other than the latest GitHub release (tests).
+
 ## Install
 
 ```

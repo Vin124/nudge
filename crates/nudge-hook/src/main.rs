@@ -1,5 +1,7 @@
-//! `nudge-hook`: run by Claude Code for every hook event with the hook JSON on
-//! stdin. Forwards a whitelisted subset to the Nudge app and exits 0.
+//! `nudge-hook`: run by Claude Code (no args) or Codex (`--agent codex`, D26)
+//! for every hook event with the hook JSON on stdin. Forwards a whitelisted
+//! subset to the Nudge app and exits 0. For Codex it also reports usage read
+//! from the transcript tail (D28, `codex.rs`).
 //!
 //! Contract (D15, AC #10):
 //! - never writes to stdout (SessionStart/UserPromptSubmit stdout is injected
@@ -7,7 +9,11 @@
 //! - always exits 0 — bad JSON, app down, timeout and panics included;
 //! - stderr only when `NUDGE_DEBUG=1`.
 
-use nudge_proto::{ancestors, now_ms, post, Agent, HookEnvelope, MAX_BODY_BYTES, PATH_HOOK, PROTOCOL_VERSION};
+mod codex;
+
+use nudge_proto::{
+    ancestors, now_ms, post, Agent, HookEnvelope, MAX_BODY_BYTES, PATH_HOOK, PATH_STATUS, PROTOCOL_VERSION,
+};
 use serde_json::{Map, Value};
 use std::io::Read;
 use std::time::Instant;
@@ -62,17 +68,33 @@ fn ancestors_for(event: &str) -> Vec<nudge_proto::ProcInfo> {
     }
 }
 
-/// Serialized envelope, or `None` if the input is unusable or too big.
-fn build_body(stdin: &[u8]) -> Option<Vec<u8>> {
-    let raw: Value = serde_json::from_slice(stdin)
-        .map_err(|e| dbg_err!("invalid JSON on stdin: {e}"))
-        .ok()?;
-    let payload = filter_payload(&raw);
+/// D26: `--agent codex` → Codex; `--agent claude`, an unknown value or no
+/// flag (Claude's `hook.sh`) → Claude. Other args are ignored.
+fn parse_agent<I: IntoIterator<Item = String>>(args: I) -> Agent {
+    let mut it = args.into_iter();
+    while let Some(a) = it.next() {
+        if a == "--agent" {
+            return match it.next().as_deref() {
+                Some("codex") => Agent::Codex,
+                _ => Agent::Claude,
+            };
+        }
+    }
+    Agent::Claude
+}
+
+fn parse_stdin(stdin: &[u8]) -> Option<Value> {
+    serde_json::from_slice(stdin).map_err(|e| dbg_err!("invalid JSON on stdin: {e}")).ok()
+}
+
+/// Serialized envelope, or `None` if it is too big.
+fn build_body(raw: &Value, agent: Agent) -> Option<Vec<u8>> {
+    let payload = filter_payload(raw);
     let event = payload.get("hook_event_name").and_then(Value::as_str).unwrap_or("");
     let t = Instant::now();
     let ancestors = ancestors_for(event);
     dbg_err!("ancestors: {} entries in {:?}", ancestors.len(), t.elapsed());
-    let env = HookEnvelope { v: PROTOCOL_VERSION, ts_ms: now_ms(), agent: Agent::Claude, ancestors, payload };
+    let env = HookEnvelope { v: PROTOCOL_VERSION, ts_ms: now_ms(), agent, ancestors, payload };
     let body = serde_json::to_vec(&env).ok()?;
     if body.len() >= MAX_BODY_BYTES {
         dbg_err!("envelope too large ({} bytes), dropped", body.len());
@@ -88,10 +110,28 @@ fn run() {
         dbg_err!("stdin read failed: {e}");
         return;
     }
-    if let Some(body) = build_body(&buf) {
-        match post(PATH_HOOK, &body) {
-            Ok(code) => dbg_err!("posted, HTTP {code}"),
-            Err(e) => dbg_err!("post failed (app down?): {e}"),
+    let agent = parse_agent(std::env::args().skip(1));
+    let Some(raw) = parse_stdin(&buf) else { return };
+    drop(buf);
+    let Some(body) = build_body(&raw, agent) else { return };
+    match post(PATH_HOOK, &body) {
+        Ok(code) => dbg_err!("posted, HTTP {code}"),
+        Err(e) => {
+            // App down: skip the status POST too (AC #10).
+            dbg_err!("post failed (app down?): {e}");
+            return;
+        }
+    }
+    // D28: Codex has no statusline; usage comes from the transcript tail.
+    if agent == Agent::Codex {
+        let t = Instant::now();
+        let status = codex::status_body(&raw);
+        dbg_err!("transcript read in {:?}, usage found: {}", t.elapsed(), status.is_some());
+        if let Some(body) = status {
+            match post(PATH_STATUS, &body) {
+                Ok(code) => dbg_err!("status posted, HTTP {code}"),
+                Err(e) => dbg_err!("status post failed: {e}"),
+            }
         }
     }
     dbg_err!("total {:?}", start.elapsed());
@@ -153,7 +193,7 @@ mod tests {
         });
         let input = serde_json::to_vec(&raw).unwrap();
         assert!(input.len() > 1024 * 1024);
-        let body = build_body(&input).expect("body");
+        let body = build_body(&parse_stdin(&input).unwrap(), Agent::Claude).expect("body");
         assert!(body.len() < 64 * 1024, "body was {} bytes", body.len());
         let env: HookEnvelope = serde_json::from_slice(&body).unwrap();
         assert_eq!(env.payload["hook_event_name"], "PostToolUse");
@@ -163,14 +203,39 @@ mod tests {
 
     #[test]
     fn invalid_json_is_dropped_without_panic() {
-        assert!(build_body(b"{not json").is_none());
-        assert!(build_body(b"").is_none());
+        assert!(parse_stdin(b"{not json").is_none());
+        assert!(parse_stdin(b"").is_none());
     }
 
     #[test]
     fn session_start_carries_ancestors() {
-        let body = build_body(br#"{"session_id":"s","hook_event_name":"SessionStart"}"#).unwrap();
+        let raw = parse_stdin(br#"{"session_id":"s","hook_event_name":"SessionStart"}"#).unwrap();
+        let body = build_body(&raw, Agent::Claude).unwrap();
         let env: HookEnvelope = serde_json::from_slice(&body).unwrap();
         assert!(!env.ancestors.is_empty() && env.ancestors.len() <= 8);
+    }
+
+    fn args(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn agent_flag_parsing_d26() {
+        assert_eq!(parse_agent(args(&[])), Agent::Claude, "no args (Claude's hook.sh)");
+        assert_eq!(parse_agent(args(&["--agent", "codex"])), Agent::Codex);
+        assert_eq!(parse_agent(args(&["--agent", "claude"])), Agent::Claude);
+        assert_eq!(parse_agent(args(&["--agent", "bogus"])), Agent::Claude);
+        assert_eq!(parse_agent(args(&["--agent"])), Agent::Claude, "flag without value");
+        assert_eq!(parse_agent(args(&["-v", "x", "--agent", "codex", "--other"])), Agent::Codex);
+        assert_eq!(parse_agent(args(&["codex"])), Agent::Claude, "bare value is not the flag");
+    }
+
+    #[test]
+    fn envelope_carries_parsed_agent() {
+        let raw = parse_stdin(br#"{"session_id":"s","hook_event_name":"Stop"}"#).unwrap();
+        for agent in [Agent::Claude, Agent::Codex] {
+            let env: HookEnvelope = serde_json::from_slice(&build_body(&raw, agent).unwrap()).unwrap();
+            assert_eq!(env.agent, agent);
+        }
     }
 }

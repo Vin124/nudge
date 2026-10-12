@@ -37,3 +37,11 @@ export function usageColor(p: number): string {
   if (p < 85) return "#ff9f0a";
   return "#ff453a";
 }
+
+/** D29: label a usage window from its length, never assumed. 10080 -> "Weekly", 300 -> "5-hour", 43200 -> "30-day". */
+export function windowLabel(minutes: number): string {
+  if (minutes === 10080) return "Weekly";
+  if (minutes > 0 && minutes % 1440 === 0) return `${minutes / 1440}-day`;
+  if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}-hour`;
+  return `${minutes}-min`;
+}

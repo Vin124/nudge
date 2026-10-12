@@ -13,6 +13,7 @@ import {
   shapeRect,
   snapToEdge,
   THICK,
+  USAGE_EXTRA_H,
   type Monitor,
 } from "./geometry";
 
@@ -175,5 +176,14 @@ describe("monitorsKey", () => {
     expect(monitorsKey([a, b], b)).not.toBe(monitorsKey([a, b], a));
     expect(monitorsKey([a, mon({ name: "B", x: 2560 })], a)).not.toBe(monitorsKey([a, b], a));
     expect(monitorsKey([a, mon({ name: "B", x: 1920, scale: 2 })], a)).not.toBe(monitorsKey([a, b], a));
+  });
+});
+
+describe("usage header growth (D30)", () => {
+  it("grows the expanded panel only with a header extra, and still fits the envelope", () => {
+    expect(panelHeight(3, USAGE_EXTRA_H)).toBe(panelHeight(3) + USAGE_EXTRA_H);
+    expect(panelHeight(50, USAGE_EXTRA_H)).toBeLessThanOrEqual(ENVELOPE);
+    expect(shapeRect("top", 200, true, 3, "home", USAGE_EXTRA_H).height).toBe(panelHeight(3, USAGE_EXTRA_H));
+    expect(shapeRect("top", 200, true, 3).height).toBe(panelHeight(3));
   });
 });

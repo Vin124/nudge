@@ -1,0 +1,14 @@
+{
+  "name": "nudge",
+  "version": "0.1.0",
+  "description": "A notch for Claude Code and Codex: live session status, usage wheels and alerts.",
+  "license": "MIT",
+  "homepage": "https://trynudge.lol",
+  "repository": "https://github.com/Vin124/nudge",
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/codex-hooks.json",
+      "interface": { "displayName": "Nudge", "shortDescription": "A notch that watches your Codex sessions", "category": "Productivity" }
+    }
+  }
+}

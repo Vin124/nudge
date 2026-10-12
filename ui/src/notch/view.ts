@@ -2,8 +2,8 @@
 // All data goes in via textContent/attributes, never innerHTML.
 
 import type { Edge, Session, SessionState, Snapshot, UsageWindow } from "../shared/contracts";
-import { formatCountdown, formatElapsed, formatPercent, usageColor } from "./format";
-import { MAX_AVATARS, type Page, type Rect } from "./geometry";
+import { formatCountdown, formatElapsed, formatPercent, usageColor, windowLabel } from "./format";
+import { MAX_AVATARS, USAGE_EXTRA_H, type Page, type Rect } from "./geometry";
 import { chevronLeft, critter, gear, sparkle, svgEl } from "./icons";
 
 export const NA_TOOLTIP =
@@ -106,8 +106,22 @@ function createGauge(): Gauge {
   return { el: root, five, seven };
 }
 
+/** D30: Claude usage was never heard (no window, no api-key verdict). */
+function claudeSilent(u: Snapshot["usage"]): boolean {
+  return u.available === null && !u.fiveHour && !u.sevenDay;
+}
+
 function updateGauge(g: Gauge, s: Snapshot): void {
   const { usage: u, config } = s;
+  const codex = s.codexUsage?.windows ?? [];
+  if (claudeSilent(u) && codex.length > 0) {
+    // D30: a Codex-only user still gets a gauge: Codex's first two windows.
+    setClass(g.el, `gauge ok${config.notch.showWeekly ? " weekly" : ""}`);
+    setAttr(g.el, "title", `Codex ${windowLabel(codex[0].windowMinutes)} limit ${formatPercent(codex[0].usedPercentage)}% used`);
+    setArc(g.five, formatPercent(codex[0].usedPercentage));
+    setArc(g.seven, config.notch.showWeekly && codex[1] ? formatPercent(codex[1].usedPercentage) : null);
+    return;
+  }
   const key = usageKey(u.fiveHour, u.available);
   setClass(g.el, `gauge ${key}${config.notch.showWeekly ? " weekly" : ""}`);
   if (key === "na") setAttr(g.el, "title", NA_TOOLTIP);
@@ -200,11 +214,15 @@ function contextClass(p: number): string {
 }
 
 interface Entry {
+  agent: Session["agent"];
   tint: number;
   dot: Avatar;
   row: HTMLElement;
   rowAvatar: Avatar;
   name: HTMLElement;
+  nameText: Text;
+  /** D30: only exists for Codex rows, so Claude rows keep today's DOM. */
+  tag: HTMLElement | null;
   state: HTMLElement;
   since: HTMLElement;
   ctx: HTMLElement;
@@ -243,6 +261,8 @@ export interface NotchView {
   settingsHost: HTMLElement;
   showRowMessage(id: string, text: string, ms?: number): void;
   sessionCount(): number;
+  /** D30: extra header height (px) while both usage groups are shown, else 0. */
+  usageExtra(): number;
 }
 
 export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
@@ -266,7 +286,16 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   const usage = el("div", "usage");
   const u5 = createUsageItem("five", "5-hour");
   const u7 = createUsageItem("seven", "Weekly");
-  usage.append(u5.el, u7.el);
+  const claudeLabel = el("div", "usage-label", "Claude");
+  claudeLabel.hidden = true;
+  usage.append(claudeLabel, u5.el, u7.el);
+  // D30: Codex group; its items are rebuilt when the window lengths change (D29).
+  const codexGroup = el("div", "usage usage-codex");
+  codexGroup.hidden = true;
+  const codexLabel = el("div", "usage-label", "Codex");
+  codexGroup.append(codexLabel);
+  let codexItems: UsageItem[] = [];
+  let codexKey = "";
   const list = el("div", "list");
   const empty = el("div", "empty-state", EMPTY_TEXT);
   const settings = el("button", "gear");
@@ -278,7 +307,7 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     e.stopPropagation();
     opts.onSettings();
   });
-  panel.append(usage, list, empty, settings);
+  panel.append(usage, codexGroup, list, empty, settings);
 
   // ---- D24: Settings page ----
   const pane = el("div", "pane");
@@ -301,6 +330,7 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
   root.append(shape);
 
   const entries = new Map<string, Entry>();
+  let usageExtra = 0;
   let last: Snapshot | null = null;
 
   function showRowMessage(id: string, text: string, ms = ROW_MESSAGE_MS): void {
@@ -326,6 +356,8 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     const rowAvatar = createAvatar(tint);
     const text = el("div", "row-text");
     const name = el("div", "row-name");
+    const nameText = document.createTextNode("");
+    name.append(nameText);
     const sub = el("div", "row-sub");
     const state = el("span", "row-state");
     const since = el("span", "row-since");
@@ -339,7 +371,7 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
         .then(() => opts.onFocus(id))
         .catch(() => showRowMessage(id, FOCUS_FAIL_TEXT));
     });
-    return { tint, dot, row, rowAvatar, name, state, since, ctx, msg, msgTimer: null };
+    return { agent: "claude", tint, dot, row, rowAvatar, name, nameText, tag: null, state, since, ctx, msg, msgTimer: null };
   }
 
   function updateEntry(e: Entry, s: Session, nowMs: number): void {
@@ -353,7 +385,18 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     setText(e.ctx, ctxText);
     setClass(e.ctx, contextClass(s.contextPercent == null ? 0 : formatPercent(s.contextPercent)));
     if (e.ctx.hidden !== !ctxText) e.ctx.hidden = !ctxText;
-    setText(e.name, s.project);
+    if (e.nameText.data !== s.project) e.nameText.data = s.project;
+    // D30: the agent never changes, but read it every render rather than trust creation order.
+    e.agent = s.agent;
+    setAttr(e.row, "data-agent", s.agent);
+    setAttr(e.dot.el, "data-agent", s.agent);
+    if (s.agent === "codex" && !e.tag) {
+      e.tag = el("span", "row-tag", "Codex");
+      e.name.append(e.tag);
+    } else if (s.agent !== "codex" && e.tag) {
+      e.tag.remove();
+      e.tag = null;
+    }
     setAttr(e.name, "title", s.cwd);
     setClass(e.state, `row-state state-${s.state}`);
     setText(e.state, STATE_LABEL[s.state]);
@@ -400,9 +443,27 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     empty.hidden = sessions.length > 0;
 
     updateGauge(gauge, snapshot);
+    const cx = snapshot.codexUsage && snapshot.codexUsage.windows.length > 0 ? snapshot.codexUsage.windows : null;
+    const claudeShown = !(cx && claudeSilent(u));
+    const labeled = claudeShown && cx !== null;
+    usage.hidden = !claudeShown;
+    claudeLabel.hidden = !labeled;
+    usage.classList.toggle("labeled", labeled);
     u7.el.hidden = !config.notch.showWeekly;
     updateUsageItem(u5, u.fiveHour, u.available, nowMs);
     updateUsageItem(u7, u.sevenDay, u.available, nowMs);
+
+    codexGroup.hidden = cx === null;
+    codexGroup.classList.toggle("labeled", labeled);
+    const key = cx ? cx.map((w) => w.windowMinutes).join(",") : "";
+    if (key !== codexKey) {
+      for (const it of codexItems) it.el.remove();
+      codexItems = (cx ?? []).map((w, i) => createUsageItem(`codex-${i}`, windowLabel(w.windowMinutes)));
+      codexGroup.append(...codexItems.map((it) => it.el));
+      codexKey = key;
+    }
+    cx?.forEach((w, i) => updateUsageItem(codexItems[i], w, true, nowMs));
+    usageExtra = labeled ? USAGE_EXTRA_H : 0;
   }
 
   return {
@@ -438,5 +499,6 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     settingsHost,
     showRowMessage,
     sessionCount: () => entries.size,
+    usageExtra: () => usageExtra,
   };
 }
