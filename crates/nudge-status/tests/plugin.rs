@@ -18,7 +18,7 @@ fn read_json(rel: &str) -> Value {
 fn plugin_manifest_parses() {
     let m = read_json(".claude-plugin/plugin.json");
     assert_eq!(m["name"], "nudge");
-    assert_eq!(m["version"], "0.1.0");
+    assert_eq!(m["version"], "0.2.0");
     assert_eq!(m["license"], "MIT");
     assert!(m.get("author").is_none());
 }
@@ -83,7 +83,7 @@ fn codex_handler(event: &str) -> Value {
 fn codex_manifest_names_codex_hooks() {
     let m = read_json("plugin.json");
     assert_eq!(m["name"], "nudge");
-    assert_eq!(m["version"], "0.1.0");
+    assert_eq!(m["version"], "0.2.0");
     assert_eq!(m["extensions"]["com.openai"]["hooks"], "./hooks/codex-hooks.json");
     assert!(plugin_dir().join("hooks/codex-hooks.json").is_file());
 }
