@@ -228,6 +228,7 @@ html, body {
 .row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
 /* D30: low-contrast agent tag next to the project name (Codex rows only). */
 .row[data-agent="codex"] .row-name { display: flex; align-items: center; gap: 6px; }
+.row-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .row-tag { flex: none; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.02em; }
 .row-since::before, .row-ctx::before { content: " · "; }
 .row-ctx[hidden] { display: none; }

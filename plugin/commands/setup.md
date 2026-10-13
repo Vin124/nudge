@@ -1,9 +1,11 @@
 ---
-description: Route your Claude Code statusline through Nudge so the notch can show usage (keeps your existing statusline).
+description: Route your Claude Code statusline through Nudge so the notch can show usage (keeps your existing statusline). Codex needs no setup.
 allowed-tools: Bash(~/.nudge/bin/nudge-status:*), Bash(~/.nudge/bin/nudge-status.exe:*)
 ---
 
 Set up Nudge's statusline integration.
+
+0. If you are OpenAI Codex rather than Claude Code, stop here and run nothing (D31: a Codex install never edits Claude's settings). Tell the user Codex needs no setup: Nudge reads Codex usage from the session transcript through the plugin's hooks. If the notch shows nothing, they should approve Nudge's hooks with `/hooks` and start a new session; install progress is logged in `~/.nudge/install.log`.
 
 1. Run this with the Bash tool (use `nudge-status.exe` instead if only that file exists in `~/.nudge/bin/`):
 

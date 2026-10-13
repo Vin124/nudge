@@ -64,6 +64,11 @@ try {
         # the agent's stdout.
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true
+        # Process.Start wraps the child's stdin in a StreamWriter using
+        # [Console]::InputEncoding and writes that encoding's preamble at once.
+        # Under code page 65001 that is a UTF-8 BOM, which nudge-hook's JSON
+        # parser rejects. A BOM-less UTF-8 encoding writes nothing.
+        try { [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
         $p = [System.Diagnostics.Process]::Start($psi)
         $null = $p.StandardOutput.ReadToEndAsync()
         $null = $p.StandardError.ReadToEndAsync()

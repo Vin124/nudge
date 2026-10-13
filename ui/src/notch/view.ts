@@ -357,7 +357,10 @@ export function createView(root: HTMLElement, opts: ViewOptions): NotchView {
     const text = el("div", "row-text");
     const name = el("div", "row-name");
     const nameText = document.createTextNode("");
-    name.append(nameText);
+    // Own span so a long name ellipsizes next to the Codex tag (a bare text node in a flex row only clips).
+    const nameSpan = el("span", "row-name-text");
+    nameSpan.append(nameText);
+    name.append(nameSpan);
     const sub = el("div", "row-sub");
     const state = el("span", "row-state");
     const since = el("span", "row-since");

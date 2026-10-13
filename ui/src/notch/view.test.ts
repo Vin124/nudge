@@ -283,6 +283,9 @@ describe("Codex (D29, D30)", () => {
     expect(row("a").dataset.agent).toBe("codex");
     expect(row("a").querySelector(".row-tag")!.textContent).toBe("Codex");
     expect(row("a").querySelector(".row-name")!.textContent).toBe("proj-aCodex");
+    // The name truncates in its own span, ahead of the tag.
+    expect(row("a").querySelector(".row-name > .row-name-text + .row-tag")).not.toBeNull();
+    expect(row("a").querySelector(".row-name-text")!.textContent).toBe("proj-a");
     expect((root.querySelector('.dots .avatar[data-id="a"]') as HTMLElement).dataset.agent).toBe("codex");
     expect(row("b").dataset.agent).toBe("claude");
     expect(row("b").querySelector(".row-tag")).toBeNull();
